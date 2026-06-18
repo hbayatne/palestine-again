@@ -1,0 +1,27 @@
+# Video clips are too large for git — add them locally to mario_land/
+mario_land/*.mp4
+mario_land/*.mov
+mario_land/*.avi
+mario_land/*.mkv
+mario_land/*.m4v
+mario_land/*.webm
+mario_land/*.MP4
+mario_land/*.MOV
+mario_land/*.AVI
+mario_land/*.MKV
+
+# Output
+output/
+
+# Temp render files
+_tmp_audio.m4a
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Music folder (add your own soundtrack locally)
+music/
