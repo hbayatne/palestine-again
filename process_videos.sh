@@ -3,8 +3,8 @@
 # Scans mario_land/Clips for videos and builds a highlight reel in mario_land/Output
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CLIPS_DIR="$SCRIPT_DIR/mario_land/Clips"
-OUTPUT_DIR="$SCRIPT_DIR/mario_land/Output"
+CLIPS_DIR="$SCRIPT_DIR/Clips"
+OUTPUT_DIR="$SCRIPT_DIR/Output"
 TMP_DIR="$(mktemp -d)"
 
 # ── Settings ────────────────────────────────────────────────────────────────
