@@ -17,9 +17,12 @@ echo ""
 # ── Step 1: FFmpeg ────────────────────────────────────────────────────────────
 if ! command -v ffmpeg &>/dev/null; then
     echo "Installing FFmpeg (this takes a minute)..."
+    # Add Homebrew to PATH for this session (Apple Silicon: /opt/homebrew, Intel: /usr/local)
+    eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || eval "$(/usr/local/bin/brew shellenv)" 2>/dev/null || true
     if ! command -v brew &>/dev/null; then
         echo "Installing Homebrew first..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        eval "$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || eval "$(/usr/local/bin/brew shellenv)" 2>/dev/null || true
     fi
     brew install ffmpeg
     echo "FFmpeg installed."
