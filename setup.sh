@@ -40,41 +40,41 @@ mkdir -p "$MARIO_LAND/Output"
 cp "$SCRIPT_SRC" "$MARIO_LAND/process_videos.sh"
 chmod +x "$MARIO_LAND/process_videos.sh"
 
-# ── Step 3: Install Folder Action (auto-triggers on new files) ────────────────
+# ── Step 3: Install LaunchAgent (auto-triggers on new files in Clips folder) ──
 echo "Setting up automatic trigger..."
 
-FA_SCRIPT_NAME="MarioLandBot.scpt"
-FA_DIR="$HOME/Library/Scripts/Folder Action Scripts"
-mkdir -p "$FA_DIR"
+PLIST="$HOME/Library/LaunchAgents/com.mariolandbot.plist"
 
-# Write the AppleScript folder action
-cat > "$FA_DIR/$FA_SCRIPT_NAME" << 'APPLESCRIPT'
-on adding folder items to this_folder after receiving these_items
-    set folderPath to POSIX path of this_folder
-    set scriptPath to folderPath & "process_videos.sh"
+# Remove any old version
+launchctl unload "$PLIST" 2>/dev/null || true
 
-    -- Wait a moment for iCloud to finish syncing the file
-    delay 5
+cat > "$PLIST" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mariolandbot</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>$MARIO_LAND/process_videos.sh</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>$MARIO_LAND/Clips</string>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/tmp/mario_land_bot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/mario_land_bot.log</string>
+</dict>
+</plist>
+PLIST
 
-    -- Run the processing script in the background
-    do shell script "bash '" & scriptPath & "' >> /tmp/mario_land_bot.log 2>&1 &"
-end adding folder items to this_folder
-APPLESCRIPT
-
-# Compile the AppleScript
-osacompile -o "$FA_DIR/${FA_SCRIPT_NAME%.scpt}.scpt" "$FA_DIR/$FA_SCRIPT_NAME" 2>/dev/null || true
-
-# Attach the folder action to the Clips folder
-CLIPS_FOLDER="$MARIO_LAND/Clips"
-osascript << OSASCRIPT
-tell application "Finder"
-    set targetFolder to POSIX file "$CLIPS_FOLDER" as alias
-    try
-        set folder actions enabled to true
-        make new folder action at targetFolder with properties {name:"MarioLandBot", script name:"MarioLandBot"}
-    end try
-end tell
-OSASCRIPT
+launchctl load "$PLIST"
 
 echo ""
 echo "==================================="
