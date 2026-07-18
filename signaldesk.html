@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignalDesk — Technical & Fundamental Trading Signals</title>
+  <style>
+:root {
+  --bg: #0b0e13;
+  --panel: #141922;
+  --panel2: #1b212c;
+  --border: #232b38;
+  --text: #e6ebf2;
+  --muted: #8a94a6;
+  --buy: #16c784;
+  --sell: #e23744;
+  --hold: #d1b73a;
+  --accent: #4c9aff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 70% -10%, #16202e 0%, var(--bg) 60%);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+header {
+  padding: 22px 28px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+header h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+header h1 .spark { color: var(--accent); }
+header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 60px; }
+
+.controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+input, select {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 11px;
+  border-radius: 9px;
+  font-size: 14px;
+  outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
+input#symbol { width: 130px; text-transform: uppercase; }
+
+.checkline { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+.checkline input { width: auto; }
+
+button#analyzeBtn {
+  background: linear-gradient(180deg, #4c9aff, #2f7de0);
+  border: none;
+  color: white;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 14px;
+}
+button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
+
+.status { margin: 12px 2px; font-size: 12px; color: var(--muted); }
+.status.loading { color: var(--accent); }
+.status.warn { color: var(--hold); }
+.status.ok { color: var(--buy); }
+
+.hidden { display: none !important; }
+
+.grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-top: 8px; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+}
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+/* verdict */
+.verdict-card { display: flex; flex-direction: column; gap: 14px; }
+.verdict {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-align: center;
+  padding: 10px;
+  border-radius: 12px;
+}
+.verdict.strong-buy { color: var(--buy); background: rgba(22,199,132,0.12); }
+.verdict.buy { color: var(--buy); background: rgba(22,199,132,0.08); }
+.verdict.hold { color: var(--hold); background: rgba(209,183,58,0.10); }
+.verdict.sell { color: var(--sell); background: rgba(226,55,68,0.08); }
+.verdict.strong-sell { color: var(--sell); background: rgba(226,55,68,0.14); }
+
+.verdict-stats { display: flex; justify-content: space-around; text-align: center; }
+.verdict-stats .n { font-size: 22px; font-weight: 700; }
+.verdict-stats .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+.gauge { height: 8px; background: var(--panel2); border-radius: 6px; overflow: hidden; position: relative; }
+.gauge::after {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,255,255,0.25);
+}
+.gauge .fill { height: 100%; transition: width 0.4s ease; }
+.gauge-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+/* trade plan */
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.plan-grid > div { display: flex; flex-direction: column; gap: 3px; background: var(--panel2); padding: 9px 11px; border-radius: 9px; }
+.plan-grid .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.plan-grid .v { font-size: 15px; font-weight: 600; }
+.v.buy, .mv.buy, .badge.buy { color: var(--buy); }
+.v.sell, .mv.sell, .badge.sell { color: var(--sell); }
+.plan-note { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 12px 0 0; }
+
+/* metrics chips */
+.metrics { display: flex; flex-wrap: wrap; gap: 8px; }
+.metric {
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 9px;
+  padding: 7px 11px; display: flex; flex-direction: column; gap: 2px; min-width: 78px;
+}
+.metric .ml { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.metric .mv { font-size: 14px; font-weight: 600; font-family: ui-monospace, monospace; }
+.metric.buy { border-color: rgba(22,199,132,0.4); }
+.metric.sell { border-color: rgba(226,55,68,0.4); }
+
+/* breakdown */
+.row { padding: 11px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: none; }
+.row-head { display: flex; align-items: center; gap: 9px; }
+.ind-name { font-weight: 600; font-size: 14px; }
+.badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+.badge.buy { background: rgba(22,199,132,0.15); }
+.badge.sell { background: rgba(226,55,68,0.15); }
+.badge.neutral { background: rgba(255,255,255,0.08); color: var(--muted); }
+.weight { margin-left: auto; font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+.votebar { position: relative; height: 5px; background: var(--panel2); border-radius: 4px; margin: 7px 0; }
+.votebar::after { content:""; position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background: rgba(255,255,255,0.18); }
+.votebar .fill { position: absolute; top: 0; height: 100%; border-radius: 4px; }
+.votebar .fill.buy { background: var(--buy); }
+.votebar .fill.sell { background: var(--sell); }
+.votebar .fill.neutral { background: var(--muted); }
+.ind-note { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+.adx-note { font-size: 12px; color: var(--accent); margin-top: 12px; }
+
+/* chart */
+.chart-card { grid-column: 1 / -1; }
+#chart { width: 100%; height: 420px; display: block; }
+
+/* fundamentals */
+.mini-score { font-size: 20px; font-weight: 700; margin-left: 8px; }
+.mini-score.buy { color: var(--buy); }
+.mini-score.sell { color: var(--sell); }
+.fund-reasons { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+.blend-note { font-size: 12.5px; color: var(--accent); margin-top: 10px; }
+
+.disclaimer {
+  margin-top: 24px; background: rgba(226,55,68,0.06); border: 1px solid rgba(226,55,68,0.25);
+  border-radius: 12px; padding: 14px 16px; font-size: 12.5px; color: #f0b6ba; line-height: 1.6;
+}
+.disclaimer strong { color: var(--sell); }
+
+.demo-banner{background:rgba(209,183,58,.12);border:1px solid rgba(209,183,58,.4);color:#e8d67a;border-radius:10px;padding:11px 14px;font-size:13px;margin:0 0 14px;line-height:1.5;}
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1><span class="spark">▲</span> SignalDesk</h1>
+      <div class="sub">Multi-indicator buy / sell signal engine · technicals + fundamentals</div>
+    </div>
+  </header>
+
+  <div class="wrap">
+      <div id="demoBanner" class="demo-banner hidden">⚠️ Showing <b>demo (simulated) data</b> — live prices from Binance/CoinGecko were unreachable in this view. Download this file and open it on your own computer for real, live market data.</div>
+    <div class="controls">
+      <div class="field">
+        <label for="preset">Quick pick</label>
+        <select id="preset">
+          <option value="">— choose asset —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="symbol">Symbol (Binance)</label>
+        <input id="symbol" value="BTCUSDT" spellcheck="false" />
+      </div>
+      <div class="field">
+        <label for="interval">Timeframe</label>
+        <select id="interval">
+          <option value="15m">15m</option>
+          <option value="1h">1h</option>
+          <option value="4h">4h</option>
+          <option value="1d" selected>1d</option>
+          <option value="1w">1w</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <label class="checkline"><input type="checkbox" id="useFundamentals" checked /> Include fundamentals</label>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button id="analyzeBtn">Analyze</button>
+      </div>
+    </div>
+
+    <div id="status" class="status">Ready.</div>
+
+    <div id="results" class="hidden">
+      <div class="grid">
+        <!-- Verdict -->
+        <div class="card verdict-card">
+          <h2>Signal</h2>
+          <div id="verdict" class="verdict hold">—</div>
+          <div class="verdict-stats">
+            <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
+            <div><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
+            <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+          </div>
+          <div>
+            <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
+            <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+          </div>
+        </div>
+
+        <!-- Trade plan -->
+        <div class="card">
+          <h2>Suggested trade plan (ATR-based)</h2>
+          <div id="plan"></div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card chart-card">
+          <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+          <canvas id="chart"></canvas>
+        </div>
+
+        <!-- Snapshot -->
+        <div class="card">
+          <h2>Indicator snapshot</h2>
+          <div id="snapshot" class="metrics"></div>
+        </div>
+
+        <!-- Fundamentals -->
+        <div class="card" id="fundamentals">
+          <h2>Fundamentals <span id="fundScore" class="mini-score">0</span></h2>
+          <div id="fundMetrics" class="metrics"></div>
+          <ul id="fundReasons" class="fund-reasons"></ul>
+        </div>
+
+        <!-- Breakdown -->
+        <div class="card chart-card">
+          <h2>Why — weighted indicator breakdown</h2>
+          <div id="breakdown"></div>
+          <div id="adxNote" class="adx-note"></div>
+          <div id="blendNote" class="blend-note"></div>
+        </div>
+      </div>
+
+      <div class="disclaimer">
+        <strong>Not financial advice.</strong> SignalDesk is an educational technical-analysis tool.
+        It computes well-known indicators and combines them mechanically — it does <em>not</em> predict
+        the future, and no indicator setup produces guaranteed or "high-percentage" wins. Markets are
+        driven by news, liquidity and randomness that no chart can foresee. Signals can and will be wrong.
+        Never risk money you can't afford to lose, always use a stop-loss, and do your own research.
+      </div>
+    </div>
+  </div>
+
+  <script>
+// --- module glue: reconstruct the `ta` namespace used by the signal engine ---
+const ta = { sma, ema, rsi, macd, bollinger, stochastic, atr, obv, adx, last, prev };
+
+// indicators.js
+// Pure technical-analysis math. Every function takes plain number arrays and
+// returns arrays aligned to the input length (leading values are `null` until
+// the indicator has enough data to be defined). No dependencies.
+
+function sma(values, period) {
+  const out = new Array(values.length).fill(null);
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) {
+    sum += values[i];
+    if (i >= period) sum -= values[i - period];
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
+}
+
+function ema(values, period) {
+  const out = new Array(values.length).fill(null);
+  const k = 2 / (period + 1);
+  let prev = null;
+  for (let i = 0; i < values.length; i++) {
+    if (i === period - 1) {
+      // seed with an SMA of the first `period` values
+      let sum = 0;
+      for (let j = 0; j < period; j++) sum += values[j];
+      prev = sum / period;
+      out[i] = prev;
+    } else if (i >= period) {
+      prev = values[i] * k + prev * (1 - k);
+      out[i] = prev;
+    }
+  }
+  return out;
+}
+
+// Wilder's smoothing (used by RSI, ATR, ADX)
+function wilderSmooth(values, period) {
+  const out = new Array(values.length).fill(null);
+  let prev = null;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] == null) continue;
+    if (prev == null) {
+      // find first window
+      const slice = values.slice(0, i + 1).filter((v) => v != null);
+      if (slice.length >= period) {
+        let sum = 0;
+        for (let j = 0; j < period; j++) sum += slice[j];
+        prev = sum / period;
+        out[i] = prev;
+      }
+    } else {
+      prev = (prev * (period - 1) + values[i]) / period;
+      out[i] = prev;
+    }
+  }
+  return out;
+}
+
+function rsi(closes, period = 14) {
+  const out = new Array(closes.length).fill(null);
+  const gains = new Array(closes.length).fill(0);
+  const losses = new Array(closes.length).fill(0);
+  for (let i = 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    gains[i] = diff > 0 ? diff : 0;
+    losses[i] = diff < 0 ? -diff : 0;
+  }
+  let avgGain = null;
+  let avgLoss = null;
+  for (let i = 1; i < closes.length; i++) {
+    if (i < period) continue;
+    if (avgGain == null) {
+      let g = 0;
+      let l = 0;
+      for (let j = 1; j <= period; j++) {
+        g += gains[j];
+        l += losses[j];
+      }
+      avgGain = g / period;
+      avgLoss = l / period;
+    } else {
+      avgGain = (avgGain * (period - 1) + gains[i]) / period;
+      avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
+    }
+    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + rs);
+  }
+  return out;
+}
+
+function macd(closes, fast = 12, slow = 26, signalPeriod = 9) {
+  const emaFast = ema(closes, fast);
+  const emaSlow = ema(closes, slow);
+  const macdLine = closes.map((_, i) =>
+    emaFast[i] != null && emaSlow[i] != null ? emaFast[i] - emaSlow[i] : null
+  );
+  // signal line = EMA of the macd line (only over its defined region)
+  const defined = macdLine.map((v) => (v == null ? 0 : v));
+  const firstIdx = macdLine.findIndex((v) => v != null);
+  const signalRaw = ema(defined.slice(firstIdx), signalPeriod);
+  const signalLine = new Array(closes.length).fill(null);
+  for (let i = 0; i < signalRaw.length; i++) {
+    if (signalRaw[i] != null) signalLine[firstIdx + i] = signalRaw[i];
+  }
+  const histogram = macdLine.map((v, i) =>
+    v != null && signalLine[i] != null ? v - signalLine[i] : null
+  );
+  return { macdLine, signalLine, histogram };
+}
+
+function bollinger(closes, period = 20, mult = 2) {
+  const mid = sma(closes, period);
+  const upper = new Array(closes.length).fill(null);
+  const lower = new Array(closes.length).fill(null);
+  for (let i = period - 1; i < closes.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += (closes[j] - mid[i]) ** 2;
+    const sd = Math.sqrt(sum / period);
+    upper[i] = mid[i] + mult * sd;
+    lower[i] = mid[i] - mult * sd;
+  }
+  return { upper, mid, lower };
+}
+
+function stochastic(highs, lows, closes, kPeriod = 14, dPeriod = 3) {
+  const k = new Array(closes.length).fill(null);
+  for (let i = kPeriod - 1; i < closes.length; i++) {
+    let hh = -Infinity;
+    let ll = Infinity;
+    for (let j = i - kPeriod + 1; j <= i; j++) {
+      if (highs[j] > hh) hh = highs[j];
+      if (lows[j] < ll) ll = lows[j];
+    }
+    k[i] = hh === ll ? 50 : ((closes[i] - ll) / (hh - ll)) * 100;
+  }
+  const d = sma(k.map((v) => (v == null ? 0 : v)), dPeriod).map((v, i) =>
+    k[i] == null ? null : v
+  );
+  return { k, d };
+}
+
+function atr(highs, lows, closes, period = 14) {
+  const tr = new Array(closes.length).fill(null);
+  for (let i = 0; i < closes.length; i++) {
+    if (i === 0) {
+      tr[i] = highs[i] - lows[i];
+    } else {
+      tr[i] = Math.max(
+        highs[i] - lows[i],
+        Math.abs(highs[i] - closes[i - 1]),
+        Math.abs(lows[i] - closes[i - 1])
+      );
+    }
+  }
+  return wilderSmooth(tr, period);
+}
+
+function obv(closes, volumes) {
+  const out = new Array(closes.length).fill(null);
+  let acc = 0;
+  out[0] = 0;
+  for (let i = 1; i < closes.length; i++) {
+    if (closes[i] > closes[i - 1]) acc += volumes[i];
+    else if (closes[i] < closes[i - 1]) acc -= volumes[i];
+    out[i] = acc;
+  }
+  return out;
+}
+
+// ADX + directional indicators — measures trend strength (not direction alone)
+function adx(highs, lows, closes, period = 14) {
+  const len = closes.length;
+  const plusDM = new Array(len).fill(0);
+  const minusDM = new Array(len).fill(0);
+  const tr = new Array(len).fill(0);
+  for (let i = 1; i < len; i++) {
+    const up = highs[i] - highs[i - 1];
+    const down = lows[i - 1] - lows[i];
+    plusDM[i] = up > down && up > 0 ? up : 0;
+    minusDM[i] = down > up && down > 0 ? down : 0;
+    tr[i] = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1])
+    );
+  }
+  const smTR = wilderSmooth(tr, period);
+  const smPlus = wilderSmooth(plusDM, period);
+  const smMinus = wilderSmooth(minusDM, period);
+  const plusDI = new Array(len).fill(null);
+  const minusDI = new Array(len).fill(null);
+  const dx = new Array(len).fill(null);
+  for (let i = 0; i < len; i++) {
+    if (smTR[i] && smTR[i] !== 0) {
+      plusDI[i] = (smPlus[i] / smTR[i]) * 100;
+      minusDI[i] = (smMinus[i] / smTR[i]) * 100;
+      const sum = plusDI[i] + minusDI[i];
+      dx[i] = sum === 0 ? 0 : (Math.abs(plusDI[i] - minusDI[i]) / sum) * 100;
+    }
+  }
+  const adxLine = wilderSmooth(dx, period);
+  return { adx: adxLine, plusDI, minusDI };
+}
+
+// Convenience: last non-null value of an array
+function last(arr) {
+  for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return arr[i];
+  return null;
+}
+
+function prev(arr) {
+  let seen = 0;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i] != null) {
+      seen++;
+      if (seen === 2) return arr[i];
+    }
+  }
+  return null;
+}
+
+// data.js
+// Fetches real OHLCV candles and fundamental metrics. Uses public, key-free,
+// CORS-enabled endpoints so the app runs from a static file with no backend.
+//
+//   Prices/candles : Binance public REST (crypto)  — falls back to synthetic
+//   Fundamentals   : CoinGecko public API (crypto)
+//
+// If the network is blocked or an endpoint fails, we degrade gracefully to a
+// deterministic synthetic series so the engine is always demonstrable.
+
+const BINANCE = "https://api.binance.com/api/v3";
+const COINGECKO = "https://api.coingecko.com/api/v3";
+
+// Map friendly interval -> Binance kline interval
+const INTERVALS = {
+  "15m": "15m",
+  "1h": "1h",
+  "4h": "4h",
+  "1d": "1d",
+  "1w": "1w",
+};
+
+async function fetchCandles(symbol, interval = "1d", limit = 400) {
+  const url = `${BINANCE}/klines?symbol=${encodeURIComponent(
+    symbol
+  )}&interval=${INTERVALS[interval] || "1d"}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Binance ${res.status}: ${await safeText(res)}`);
+  const raw = await res.json();
+  if (!Array.isArray(raw) || raw.length === 0) throw new Error("No candle data returned.");
+  return raw.map((k) => ({
+    time: k[0],
+    open: +k[1],
+    high: +k[2],
+    low: +k[3],
+    close: +k[4],
+    volume: +k[5],
+  }));
+}
+
+// Fundamentals for crypto via CoinGecko. `coingeckoId` e.g. "bitcoin".
+async function fetchFundamentals(coingeckoId) {
+  if (!coingeckoId) return null;
+  const url = `${COINGECKO}/coins/${encodeURIComponent(
+    coingeckoId
+  )}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+  const d = await res.json();
+  const m = d.market_data || {};
+  return {
+    name: d.name,
+    symbol: (d.symbol || "").toUpperCase(),
+    marketCap: m.market_cap?.usd ?? null,
+    marketCapRank: d.market_cap_rank ?? null,
+    volume24h: m.total_volume?.usd ?? null,
+    circulating: m.circulating_supply ?? null,
+    maxSupply: m.max_supply ?? null,
+    ath: m.ath?.usd ?? null,
+    athChangePct: m.ath_change_percentage?.usd ?? null,
+    change24h: m.price_change_percentage_24h ?? null,
+    change7d: m.price_change_percentage_7d ?? null,
+    change30d: m.price_change_percentage_30d ?? null,
+    change1y: m.price_change_percentage_1y ?? null,
+    sentimentUp: d.sentiment_votes_up_percentage ?? null,
+  };
+}
+
+// Turn raw fundamentals into a -100..100 score with reasons.
+function scoreFundamentals(f) {
+  if (!f) return null;
+  const reasons = [];
+  let score = 0;
+
+  // Liquidity: volume/market-cap turnover. Healthy liquidity is mildly positive.
+  if (f.volume24h && f.marketCap) {
+    const turnover = f.volume24h / f.marketCap;
+    if (turnover > 0.15) { score += 15; reasons.push(`High liquidity (24h turnover ${(turnover * 100).toFixed(1)}%)`); }
+    else if (turnover > 0.03) { score += 8; reasons.push(`Healthy liquidity (${(turnover * 100).toFixed(1)}% turnover)`); }
+    else { score -= 5; reasons.push(`Thin liquidity (${(turnover * 100).toFixed(1)}% turnover)`); }
+  }
+
+  // Market-cap rank as a quality/size proxy.
+  if (f.marketCapRank) {
+    if (f.marketCapRank <= 10) { score += 15; reasons.push(`Top-10 asset (rank #${f.marketCapRank})`); }
+    else if (f.marketCapRank <= 50) { score += 8; reasons.push(`Large-cap (rank #${f.marketCapRank})`); }
+    else if (f.marketCapRank > 200) { score -= 10; reasons.push(`Small-cap (rank #${f.marketCapRank}) — higher risk`); }
+  }
+
+  // Distance from all-time high: deep discounts = value opportunity but also weakness.
+  if (f.athChangePct != null) {
+    if (f.athChangePct > -15) { score -= 10; reasons.push(`Near ATH (${f.athChangePct.toFixed(0)}%) — limited upside, froth risk`); }
+    else if (f.athChangePct < -75) { score += 12; reasons.push(`Deeply discounted (${f.athChangePct.toFixed(0)}% from ATH) — value zone`); }
+    else { score += 4; reasons.push(`${f.athChangePct.toFixed(0)}% from ATH`); }
+  }
+
+  // Medium-term momentum (30d) as a fundamental-trend tilt.
+  if (f.change30d != null) {
+    if (f.change30d > 20) { score += 12; reasons.push(`Strong 30d momentum (+${f.change30d.toFixed(0)}%)`); }
+    else if (f.change30d > 0) { score += 5; reasons.push(`Positive 30d (+${f.change30d.toFixed(0)}%)`); }
+    else if (f.change30d < -20) { score -= 12; reasons.push(`Weak 30d (${f.change30d.toFixed(0)}%)`); }
+    else { score -= 4; reasons.push(`Negative 30d (${f.change30d.toFixed(0)}%)`); }
+  }
+
+  // Supply pressure: uncapped or huge dilution ahead is a mild negative.
+  if (f.maxSupply && f.circulating) {
+    const pctOut = f.circulating / f.maxSupply;
+    if (pctOut < 0.6) { score -= 6; reasons.push(`${(pctOut * 100).toFixed(0)}% of max supply circulating — dilution ahead`); }
+    else { score += 4; reasons.push(`${(pctOut * 100).toFixed(0)}% of supply circulating — low dilution`); }
+  } else if (!f.maxSupply) {
+    reasons.push("No hard supply cap (inflationary)");
+  }
+
+  score = Math.max(-100, Math.min(100, score));
+  return { score, reasons };
+}
+
+// Deterministic synthetic OHLCV so the app always works offline. Includes
+// trend, cycles and volatility clustering so indicators produce varied output.
+function syntheticCandles(seedStr = "DEMO", n = 400) {
+  let seed = 0;
+  for (const ch of seedStr) seed = (seed * 31 + ch.charCodeAt(0)) % 2147483647;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  const candles = [];
+  let price = 100 + rand() * 200;
+  let vol = 0.02;
+  const now = Date.now();
+  for (let i = 0; i < n; i++) {
+    const trend = Math.sin(i / 40) * 0.004 + Math.sin(i / 13) * 0.002;
+    vol = Math.max(0.008, vol * 0.94 + (rand() * 0.03) * 0.06); // vol clustering
+    const shock = (rand() - 0.5) * vol * 4;
+    const open = price;
+    const close = Math.max(0.01, open * (1 + trend + shock));
+    const high = Math.max(open, close) * (1 + rand() * vol);
+    const low = Math.min(open, close) * (1 - rand() * vol);
+    const volume = 1000 + rand() * 5000 * (1 + Math.abs(shock) * 20);
+    candles.push({
+      time: now - (n - i) * 86400000,
+      open,
+      high,
+      low,
+      close,
+      volume,
+    });
+    price = close;
+  }
+  return candles;
+}
+
+async function safeText(res) {
+  try {
+    return (await res.text()).slice(0, 140);
+  } catch {
+    return "";
+  }
+}
+
+// signals.js
+// Turns raw indicators into a transparent, weighted BUY / SELL / HOLD decision.
+//
+// Design philosophy: no single indicator is trusted. Each one casts a vote in
+// [-1, +1] (bearish .. bullish) with an explanation, and votes are combined by
+// weight into a composite score in [-100, +100]. The score, the confidence
+// (agreement between indicators), and the full breakdown are all returned so
+// the user sees *why*, never a black box.
+
+
+// Weights reflect rough real-world reliability. Trend/momentum confirmation
+// (MACD, moving-average structure, ADX-graded) carries more than a single
+// oscillator reading. Tune these to your own style.
+const WEIGHTS = {
+  trend: 0.22, // price vs SMA50/SMA200 structure
+  macd: 0.18,
+  rsi: 0.14,
+  stoch: 0.10,
+  bollinger: 0.10,
+  emaCross: 0.13,
+  obv: 0.08,
+  adx: 0.05, // trend-strength gate, mostly a multiplier below
+};
+
+function scoreTrend(closes, sma50, sma200) {
+  const price = ta.last(closes);
+  const s50 = ta.last(sma50);
+  const s200 = ta.last(sma200);
+  if (s50 == null) return { vote: 0, note: "Not enough data for trend structure." };
+  let vote = 0;
+  const parts = [];
+  if (price > s50) { vote += 0.5; parts.push("price > SMA50"); }
+  else { vote -= 0.5; parts.push("price < SMA50"); }
+  if (s200 != null) {
+    if (s50 > s200) { vote += 0.5; parts.push("SMA50 > SMA200 (golden-cross regime)"); }
+    else { vote -= 0.5; parts.push("SMA50 < SMA200 (death-cross regime)"); }
+  } else {
+    // no long MA available; lean on shorter one a bit more
+    vote += price > s50 ? 0.25 : -0.25;
+  }
+  return { vote: clamp(vote), note: parts.join(", ") };
+}
+
+function scoreMacd(m) {
+  const line = ta.last(m.macdLine);
+  const sig = ta.last(m.signalLine);
+  const hist = ta.last(m.histogram);
+  const histPrev = ta.prev(m.histogram);
+  if (line == null || sig == null) return { vote: 0, note: "MACD undefined." };
+  let vote = 0;
+  const parts = [];
+  if (line > sig) { vote += 0.5; parts.push("MACD above signal (bullish)"); }
+  else { vote -= 0.5; parts.push("MACD below signal (bearish)"); }
+  if (hist != null && histPrev != null) {
+    if (hist > histPrev) { vote += 0.3; parts.push("histogram rising (momentum building)"); }
+    else { vote -= 0.3; parts.push("histogram falling (momentum fading)"); }
+  }
+  if (line > 0) { vote += 0.2; parts.push("MACD > 0"); }
+  else { vote -= 0.2; parts.push("MACD < 0"); }
+  return { vote: clamp(vote), note: parts.join(", ") };
+}
+
+function scoreRsi(rsiArr) {
+  const r = ta.last(rsiArr);
+  if (r == null) return { vote: 0, note: "RSI undefined." };
+  let vote = 0;
+  let note;
+  if (r <= 30) { vote = 0.8; note = `RSI ${r.toFixed(1)} — oversold, mean-reversion buy zone`; }
+  else if (r < 45) { vote = 0.35; note = `RSI ${r.toFixed(1)} — weak, leaning bullish recovery`; }
+  else if (r <= 55) { vote = 0; note = `RSI ${r.toFixed(1)} — neutral`; }
+  else if (r < 70) { vote = -0.35; note = `RSI ${r.toFixed(1)} — strong, leaning overbought`; }
+  else { vote = -0.8; note = `RSI ${r.toFixed(1)} — overbought, distribution risk`; }
+  return { vote, note };
+}
+
+function scoreStoch(st) {
+  const k = ta.last(st.k);
+  const d = ta.last(st.d);
+  if (k == null || d == null) return { vote: 0, note: "Stochastic undefined." };
+  let vote = 0;
+  const parts = [];
+  if (k < 20) { vote += 0.5; parts.push(`%K ${k.toFixed(0)} oversold`); }
+  else if (k > 80) { vote -= 0.5; parts.push(`%K ${k.toFixed(0)} overbought`); }
+  else parts.push(`%K ${k.toFixed(0)} mid-range`);
+  if (k > d) { vote += 0.3; parts.push("%K crossing up %D"); }
+  else { vote -= 0.3; parts.push("%K crossing down %D"); }
+  return { vote: clamp(vote), note: parts.join(", ") };
+}
+
+function scoreBollinger(bb, closes) {
+  const price = ta.last(closes);
+  const up = ta.last(bb.upper);
+  const lo = ta.last(bb.lower);
+  const mid = ta.last(bb.mid);
+  if (up == null) return { vote: 0, note: "Bollinger undefined." };
+  const pctB = (price - lo) / (up - lo); // 0 = lower band, 1 = upper band
+  let vote = 0;
+  let note;
+  if (pctB <= 0.05) { vote = 0.7; note = "Price riding lower band — stretched, bounce likely"; }
+  else if (pctB < 0.35) { vote = 0.3; note = "Price in lower half of bands"; }
+  else if (pctB <= 0.65) { vote = 0; note = "Price near band midline"; }
+  else if (pctB < 0.95) { vote = -0.3; note = "Price in upper half of bands"; }
+  else { vote = -0.7; note = "Price riding upper band — stretched, pullback likely"; }
+  return { vote, note, extra: { pctB, mid } };
+}
+
+function scoreEmaCross(closes) {
+  const e12 = ta.ema(closes, 12);
+  const e26 = ta.ema(closes, 26);
+  const a = ta.last(e12);
+  const b = ta.last(e26);
+  const ap = ta.prev(e12);
+  const bp = ta.prev(e26);
+  if (a == null || b == null) return { vote: 0, note: "EMA cross undefined." };
+  let vote = a > b ? 0.5 : -0.5;
+  const parts = [a > b ? "EMA12 > EMA26 (bullish)" : "EMA12 < EMA26 (bearish)"];
+  if (ap != null && bp != null) {
+    const crossedUp = ap <= bp && a > b;
+    const crossedDown = ap >= bp && a < b;
+    if (crossedUp) { vote = 1; parts.push("fresh bullish crossover"); }
+    if (crossedDown) { vote = -1; parts.push("fresh bearish crossover"); }
+  }
+  return { vote: clamp(vote), note: parts.join(", ") };
+}
+
+function scoreObv(obvArr) {
+  // slope of OBV over recent window = accumulation vs distribution
+  const vals = obvArr.filter((v) => v != null);
+  if (vals.length < 10) return { vote: 0, note: "OBV needs more data." };
+  const window = vals.slice(-10);
+  const slope = window[window.length - 1] - window[0];
+  const norm = Math.abs(window[0]) > 0 ? slope / Math.abs(window[0]) : slope;
+  let vote = clamp(norm * 5);
+  const note =
+    slope > 0
+      ? "OBV rising — volume confirming accumulation"
+      : slope < 0
+      ? "OBV falling — volume confirming distribution"
+      : "OBV flat";
+  return { vote, note };
+}
+
+function adxMultiplier(adxArr) {
+  // ADX < 20 = choppy/rangebound (dampen trend signals);
+  // ADX > 25 = strong trend (amplify). Returns [0.6 .. 1.25] and a note.
+  const a = ta.last(adxArr);
+  if (a == null) return { mult: 1, adx: null, note: "ADX undefined." };
+  let mult;
+  let note;
+  if (a < 20) { mult = 0.7; note = `ADX ${a.toFixed(0)} — weak/no trend, signals dampened`; }
+  else if (a < 25) { mult = 0.9; note = `ADX ${a.toFixed(0)} — trend forming`; }
+  else if (a < 40) { mult = 1.15; note = `ADX ${a.toFixed(0)} — strong trend, signals amplified`; }
+  else { mult = 1.25; note = `ADX ${a.toFixed(0)} — very strong trend`; }
+  return { mult, adx: a, note };
+}
+
+function clamp(v, lo = -1, hi = 1) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// Main entry: candles = [{time, open, high, low, close, volume}, ...]
+function analyze(candles) {
+  const closes = candles.map((c) => c.close);
+  const highs = candles.map((c) => c.high);
+  const lows = candles.map((c) => c.low);
+  const volumes = candles.map((c) => c.volume);
+
+  const ind = {
+    sma20: ta.sma(closes, 20),
+    sma50: ta.sma(closes, 50),
+    sma200: ta.sma(closes, 200),
+    rsi: ta.rsi(closes, 14),
+    macd: ta.macd(closes),
+    bollinger: ta.bollinger(closes, 20, 2),
+    stochastic: ta.stochastic(highs, lows, closes, 14, 3),
+    atr: ta.atr(highs, lows, closes, 14),
+    obv: ta.obv(closes, volumes),
+    adx: ta.adx(highs, lows, closes, 14),
+  };
+
+  const votes = {
+    trend: scoreTrend(closes, ind.sma50, ind.sma200),
+    macd: scoreMacd(ind.macd),
+    rsi: scoreRsi(ind.rsi),
+    stoch: scoreStoch(ind.stochastic),
+    bollinger: scoreBollinger(ind.bollinger, closes),
+    emaCross: scoreEmaCross(closes),
+    obv: scoreObv(ind.obv),
+  };
+
+  const adxInfo = adxMultiplier(ind.adx.adx);
+
+  // Weighted composite. Trend-following components (trend, macd, emaCross) are
+  // scaled by the ADX multiplier; oscillators are not (they work in ranges).
+  const trendFollowers = new Set(["trend", "macd", "emaCross"]);
+  let composite = 0;
+  let weightSum = 0;
+  const breakdown = [];
+  for (const key of Object.keys(votes)) {
+    const w = WEIGHTS[key];
+    const mult = trendFollowers.has(key) ? adxInfo.mult : 1;
+    const contribution = votes[key].vote * w * mult;
+    composite += contribution;
+    weightSum += w;
+    breakdown.push({
+      name: key,
+      vote: votes[key].vote,
+      weight: w,
+      contribution,
+      note: votes[key].note,
+    });
+  }
+  // normalize to [-100, 100]
+  const score = clamp((composite / weightSum) * 100, -100, 100);
+
+  // Confidence = how much the indicators agree (low dispersion => high conf),
+  // scaled by signal strength.
+  const voteVals = breakdown.map((b) => b.vote);
+  const mean = voteVals.reduce((a, b) => a + b, 0) / voteVals.length;
+  const variance =
+    voteVals.reduce((a, b) => a + (b - mean) ** 2, 0) / voteVals.length;
+  const agreement = 1 - Math.min(1, Math.sqrt(variance)); // 0..1
+  const confidence = Math.round(
+    Math.min(100, (Math.abs(score) / 100) * 0.6 * 100 + agreement * 40)
+  );
+
+  // Decision thresholds
+  let action;
+  if (score >= 45) action = "STRONG BUY";
+  else if (score >= 18) action = "BUY";
+  else if (score > -18) action = "HOLD / NEUTRAL";
+  else if (score > -45) action = "SELL";
+  else action = "STRONG SELL";
+
+  // Trade plan from ATR (volatility-based stops keep risk consistent).
+  const price = ta.last(closes);
+  const atrVal = ta.last(ind.atr);
+  const plan = buildTradePlan(action, price, atrVal);
+
+  breakdown.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+
+  return {
+    score: Math.round(score),
+    action,
+    confidence,
+    price,
+    breakdown,
+    adx: adxInfo,
+    plan,
+    snapshot: {
+      rsi: ta.last(ind.rsi),
+      macdHist: ta.last(ind.macd.histogram),
+      atr: atrVal,
+      sma20: ta.last(ind.sma20),
+      sma50: ta.last(ind.sma50),
+      sma200: ta.last(ind.sma200),
+      stochK: ta.last(ind.stochastic.k),
+    },
+    indicators: ind,
+  };
+}
+
+function buildTradePlan(action, price, atrVal) {
+  if (price == null || atrVal == null) return null;
+  const bullish = action.includes("BUY");
+  const bearish = action.includes("SELL");
+  if (!bullish && !bearish) {
+    return {
+      side: "FLAT",
+      note: "No edge right now — wait for a cleaner setup. Sitting out is a position.",
+    };
+  }
+  const side = bullish ? "LONG" : "SHORT";
+  const stopDist = 1.5 * atrVal; // 1.5x ATR stop
+  const rr = 2; // target 2:1 reward-to-risk
+  const entry = price;
+  const stop = bullish ? price - stopDist : price + stopDist;
+  const target = bullish ? price + stopDist * rr : price - stopDist * rr;
+  return {
+    side,
+    entry,
+    stop,
+    target,
+    riskReward: rr,
+    riskPct: (stopDist / price) * 100,
+    note: `${side} plan: enter ~${fmt(entry)}, stop ${fmt(stop)} (1.5×ATR), target ${fmt(
+      target
+    )} (${rr}:1 R:R). Size so this stop risks ≤1–2% of your account.`,
+  };
+}
+
+function fmt(v) {
+  if (v == null) return "—";
+  if (v >= 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (v >= 1) return v.toFixed(2);
+  return v.toPrecision(4);
+}
+
+// Blend a fundamentals score (-100..100) with the technical score.
+function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
+  if (fundamentalScore == null) return technicalScore;
+  return Math.round(technicalScore * techWeight + fundamentalScore * (1 - techWeight));
+}
+
+// app.js — UI controller: wires inputs -> data -> signal engine -> render.
+
+
+// A few popular assets with their CoinGecko ids for fundamentals.
+const PRESETS = [
+  { symbol: "BTCUSDT", cg: "bitcoin", label: "Bitcoin" },
+  { symbol: "ETHUSDT", cg: "ethereum", label: "Ethereum" },
+  { symbol: "SOLUSDT", cg: "solana", label: "Solana" },
+  { symbol: "BNBUSDT", cg: "binancecoin", label: "BNB" },
+  { symbol: "XRPUSDT", cg: "ripple", label: "XRP" },
+  { symbol: "ADAUSDT", cg: "cardano", label: "Cardano" },
+  { symbol: "DOGEUSDT", cg: "dogecoin", label: "Dogecoin" },
+  { symbol: "AVAXUSDT", cg: "avalanche-2", label: "Avalanche" },
+];
+
+const $ = (id) => document.getElementById(id);
+const state = { candles: [], result: null, fundamentals: null };
+
+function fmt(v, opts = {}) {
+  if (v == null || Number.isNaN(v)) return "—";
+  const abs = Math.abs(v);
+  if (opts.pct) return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+  if (opts.compact) {
+    if (abs >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+    if (abs >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+    return `$${v.toFixed(2)}`;
+  }
+  if (abs >= 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (abs >= 1) return v.toFixed(2);
+  return v.toPrecision(4);
+}
+
+async function run() {
+  const symbol = $("symbol").value.trim().toUpperCase();
+  const interval = $("interval").value;
+  const useFund = $("useFundamentals").checked;
+  setStatus("Fetching market data…", "loading");
+  $("analyzeBtn").disabled = true;
+
+  let candles;
+  let source;
+  try {
+    candles = await fetchCandles(symbol, interval, 400);
+    source = "Binance (live)";
+  } catch (err) {
+    candles = syntheticCandles(symbol + interval, 400);
+    source = "Synthetic demo data (live fetch failed)";
+    console.warn("Live fetch failed, using synthetic:", err);
+  }
+  state.candles = candles;
+
+  // Fundamentals (best-effort; crypto only)
+  let fundScore = null;
+  state.fundamentals = null;
+  if (useFund) {
+    const preset = PRESETS.find((p) => p.symbol === symbol);
+    if (preset) {
+      try {
+        const f = await fetchFundamentals(preset.cg);
+        state.fundamentals = f;
+        fundScore = scoreFundamentals(f);
+      } catch (err) {
+        console.warn("Fundamentals fetch failed:", err);
+      }
+    }
+  }
+
+  const result = analyze(candles);
+  if (fundScore) result.blendedScore = combine(result.score, fundScore.score, 0.7);
+  result.fundScore = fundScore;
+  state.result = result;
+
+  render(result, source);
+  setStatus(
+    `${symbol} · ${interval} · ${candles.length} candles · ${source}`,
+    source.includes("Synthetic") ? "warn" : "ok"
+  );
+  $("analyzeBtn").disabled = false;
+}
+
+function setStatus(msg, cls) {
+  const el = $("status");
+  el.textContent = msg;
+  el.className = "status " + (cls || "");
+  const banner = $("demoBanner");
+  if (banner) banner.classList.toggle("hidden", cls !== "warn");
+}
+
+function render(r, source) {
+  $("results").classList.remove("hidden");
+
+  // Verdict card
+  const finalScore = r.blendedScore != null ? r.blendedScore : r.score;
+  const verdict = $("verdict");
+  verdict.textContent = r.action;
+  verdict.className = "verdict " + verdictClass(r.action);
+  $("scoreVal").textContent = (finalScore >= 0 ? "+" : "") + finalScore;
+  $("confVal").textContent = r.confidence + "%";
+  $("priceVal").textContent = "$" + fmt(r.price);
+
+  // score gauge fill (-100..100 -> 0..100%)
+  const pct = (finalScore + 100) / 2;
+  $("gaugeFill").style.width = pct + "%";
+  $("gaugeFill").style.background = gaugeColor(finalScore);
+
+  // Trade plan
+  const plan = r.plan;
+  const planEl = $("plan");
+  if (plan && plan.side !== "FLAT") {
+    planEl.innerHTML = `
+      <div class="plan-grid">
+        <div><span class="k">Side</span><span class="v ${plan.side === "LONG" ? "buy" : "sell"}">${plan.side}</span></div>
+        <div><span class="k">Entry</span><span class="v">$${fmt(plan.entry)}</span></div>
+        <div><span class="k">Stop-loss</span><span class="v sell">$${fmt(plan.stop)}</span></div>
+        <div><span class="k">Target</span><span class="v buy">$${fmt(plan.target)}</span></div>
+        <div><span class="k">Risk / trade</span><span class="v">${plan.riskPct.toFixed(2)}% (to stop)</span></div>
+        <div><span class="k">Reward:Risk</span><span class="v">${plan.riskReward}:1</span></div>
+      </div>
+      <p class="plan-note">${plan.note}</p>`;
+  } else {
+    planEl.innerHTML = `<p class="plan-note">${plan ? plan.note : "No trade plan available."}</p>`;
+  }
+
+  // Snapshot chips
+  const s = r.snapshot;
+  $("snapshot").innerHTML = [
+    chip("RSI(14)", s.rsi?.toFixed(1), rsiTone(s.rsi)),
+    chip("Stoch %K", s.stochK?.toFixed(0)),
+    chip("MACD hist", s.macdHist?.toFixed(4), s.macdHist > 0 ? "buy" : "sell"),
+    chip("ATR(14)", fmt(s.atr)),
+    chip("SMA50", fmt(s.sma50)),
+    chip("SMA200", fmt(s.sma200)),
+    chip("ADX", r.adx.adx?.toFixed(0), r.adx.adx > 25 ? "buy" : ""),
+  ].join("");
+
+  // Indicator breakdown table
+  $("breakdown").innerHTML = r.breakdown
+    .map((b) => {
+      const dir = b.vote > 0.15 ? "buy" : b.vote < -0.15 ? "sell" : "neutral";
+      const label = b.vote > 0.15 ? "Bullish" : b.vote < -0.15 ? "Bearish" : "Neutral";
+      const barW = Math.abs(b.vote) * 50;
+      const barSide = b.vote >= 0 ? "left:50%" : `right:50%`;
+      return `
+        <div class="row">
+          <div class="row-head">
+            <span class="ind-name">${prettyName(b.name)}</span>
+            <span class="badge ${dir}">${label}</span>
+            <span class="weight">w ${(b.weight * 100).toFixed(0)}%</span>
+          </div>
+          <div class="votebar"><span class="fill ${dir}" style="${barSide};width:${barW}%"></span></div>
+          <div class="ind-note">${b.note}</div>
+        </div>`;
+    })
+    .join("");
+
+  // ADX regime note
+  $("adxNote").textContent = r.adx.note || "";
+
+  // Fundamentals
+  const fundWrap = $("fundamentals");
+  if (r.fundScore && state.fundamentals) {
+    const f = state.fundamentals;
+    fundWrap.classList.remove("hidden");
+    $("fundScore").textContent = (r.fundScore.score >= 0 ? "+" : "") + r.fundScore.score;
+    $("fundScore").className = "mini-score " + (r.fundScore.score >= 0 ? "buy" : "sell");
+    $("fundMetrics").innerHTML = [
+      chip("Market cap", fmt(f.marketCap, { compact: true })),
+      chip("Rank", f.marketCapRank ? "#" + f.marketCapRank : "—"),
+      chip("24h vol", fmt(f.volume24h, { compact: true })),
+      chip("24h", fmt(f.change24h, { pct: true }), f.change24h > 0 ? "buy" : "sell"),
+      chip("7d", fmt(f.change7d, { pct: true }), f.change7d > 0 ? "buy" : "sell"),
+      chip("30d", fmt(f.change30d, { pct: true }), f.change30d > 0 ? "buy" : "sell"),
+      chip("From ATH", fmt(f.athChangePct, { pct: true })),
+    ].join("");
+    $("fundReasons").innerHTML = r.fundScore.reasons.map((x) => `<li>${x}</li>`).join("");
+    $("blendNote").textContent =
+      r.blendedScore != null
+        ? `Final score blends technicals (70%) + fundamentals (30%) → ${r.blendedScore >= 0 ? "+" : ""}${r.blendedScore}.`
+        : "";
+  } else {
+    fundWrap.classList.add("hidden");
+    $("blendNote").textContent = "";
+  }
+
+  drawChart(state.candles, r.indicators);
+}
+
+function chip(label, value, tone = "") {
+  return `<div class="metric ${tone}"><span class="ml">${label}</span><span class="mv">${
+    value ?? "—"
+  }</span></div>`;
+}
+
+function rsiTone(v) {
+  if (v == null) return "";
+  if (v <= 30) return "buy";
+  if (v >= 70) return "sell";
+  return "";
+}
+
+function prettyName(k) {
+  return {
+    trend: "Trend structure (MA)",
+    macd: "MACD",
+    rsi: "RSI",
+    stoch: "Stochastic",
+    bollinger: "Bollinger Bands",
+    emaCross: "EMA 12/26 cross",
+    obv: "On-Balance Volume",
+  }[k] || k;
+}
+
+function verdictClass(a) {
+  if (a.includes("STRONG BUY")) return "strong-buy";
+  if (a.includes("BUY")) return "buy";
+  if (a.includes("STRONG SELL")) return "strong-sell";
+  if (a.includes("SELL")) return "sell";
+  return "hold";
+}
+
+function gaugeColor(score) {
+  if (score >= 45) return "#16c784";
+  if (score >= 18) return "#4cd3a5";
+  if (score > -18) return "#c7b84c";
+  if (score > -45) return "#ea5f6b";
+  return "#e23744";
+}
+
+// ---- Canvas candlestick chart with SMA overlays + RSI subpanel ----
+function drawChart(candles, ind) {
+  const canvas = $("chart");
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const view = candles.slice(-140);
+  const offset = candles.length - view.length;
+  const padL = 8;
+  const padR = 58;
+  const priceH = cssH * 0.72;
+  const rsiTop = priceH + 24;
+  const rsiH = cssH - rsiTop - 6;
+
+  const highs = view.map((c) => c.high);
+  const lows = view.map((c) => c.low);
+  let max = Math.max(...highs);
+  let min = Math.min(...lows);
+  const padY = (max - min) * 0.08;
+  max += padY;
+  min -= padY;
+  const x = (i) => padL + (i / (view.length - 1)) * (cssW - padL - padR);
+  const y = (p) => 8 + (1 - (p - min) / (max - min)) * (priceH - 16);
+
+  // grid + price axis
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.textBaseline = "middle";
+  for (let g = 0; g <= 4; g++) {
+    const p = min + (g / 4) * (max - min);
+    const yy = y(p);
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.beginPath();
+    ctx.moveTo(padL, yy);
+    ctx.lineTo(cssW - padR, yy);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.textAlign = "left";
+    ctx.fillText(fmt(p), cssW - padR + 4, yy);
+  }
+
+  const cw = Math.max(1.5, (cssW - padL - padR) / view.length * 0.62);
+  for (let i = 0; i < view.length; i++) {
+    const c = view[i];
+    const up = c.close >= c.open;
+    ctx.strokeStyle = up ? "#16c784" : "#e23744";
+    ctx.fillStyle = up ? "#16c784" : "#e23744";
+    const xi = x(i);
+    ctx.beginPath();
+    ctx.moveTo(xi, y(c.high));
+    ctx.lineTo(xi, y(c.low));
+    ctx.stroke();
+    const yo = y(c.open);
+    const yc = y(c.close);
+    ctx.fillRect(xi - cw / 2, Math.min(yo, yc), cw, Math.max(1, Math.abs(yc - yo)));
+  }
+
+  // MA overlays
+  const overlay = (arr, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < view.length; i++) {
+      const v = arr[offset + i];
+      if (v == null) continue;
+      const px = x(i);
+      const py = y(v);
+      if (!started) { ctx.moveTo(px, py); started = true; }
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  };
+  overlay(ind.sma20, "#4c9aff");
+  overlay(ind.sma50, "#f5a623");
+  overlay(ind.sma200, "#b06cff");
+  // Bollinger bands (faint)
+  overlay(ind.bollinger.upper, "rgba(255,255,255,0.25)");
+  overlay(ind.bollinger.lower, "rgba(255,255,255,0.25)");
+
+  // legend
+  ctx.textAlign = "left";
+  const legend = [
+    ["SMA20", "#4c9aff"],
+    ["SMA50", "#f5a623"],
+    ["SMA200", "#b06cff"],
+  ];
+  let lx = padL;
+  legend.forEach(([t, col]) => {
+    ctx.fillStyle = col;
+    ctx.fillRect(lx, 10, 10, 3);
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.fillText(t, lx + 14, 12);
+    lx += 62;
+  });
+
+  // RSI subpanel
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fillText("RSI(14)", padL, rsiTop - 8);
+  const ry = (v) => rsiTop + (1 - v / 100) * rsiH;
+  [30, 70].forEach((lvl) => {
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.beginPath();
+    ctx.moveTo(padL, ry(lvl));
+    ctx.lineTo(cssW - padR, ry(lvl));
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillText(String(lvl), cssW - padR + 4, ry(lvl));
+  });
+  ctx.strokeStyle = "#00d1b2";
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < view.length; i++) {
+    const v = ind.rsi[offset + i];
+    if (v == null) continue;
+    const px = x(i);
+    const py = ry(v);
+    if (!started) { ctx.moveTo(px, py); started = true; }
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+}
+
+// wire up
+window.addEventListener("DOMContentLoaded", () => {
+  const sel = $("preset");
+  PRESETS.forEach((p) => {
+    const o = document.createElement("option");
+    o.value = p.symbol;
+    o.textContent = `${p.label} (${p.symbol})`;
+    sel.appendChild(o);
+  });
+  sel.addEventListener("change", () => {
+    $("symbol").value = sel.value;
+    run();
+  });
+  $("analyzeBtn").addEventListener("click", run);
+  $("symbol").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") run();
+  });
+  window.addEventListener("resize", () => {
+    if (state.result) drawChart(state.candles, state.result.indicators);
+  });
+  // initial
+  run();
+});
+
+</script>
+</body>
+</html>
