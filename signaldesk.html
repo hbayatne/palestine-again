@@ -207,7 +207,7 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
   </header>
 
   <div class="wrap">
-      <div id="demoBanner" class="demo-banner hidden">⚠️ Showing <b>demo (simulated) data</b> — live prices from Binance/CoinGecko were unreachable in this view. Download this file and open it on your own computer for real, live market data.</div>
+      <div id="demoBanner" class="demo-banner hidden">⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source. If you opened this file in <b>Safari</b>, try <b>Google Chrome</b> instead (Safari blocks downloaded files from loading live data). Otherwise a network/firewall may be blocking the exchanges.</div>
     <div class="controls">
       <div class="field">
         <label for="preset">Quick pick</label>
@@ -549,14 +549,38 @@ const INTERVALS = {
   "1w": "1w",
 };
 
+// Tries several public exchanges in order so a regional block on one (e.g.
+// Binance is unavailable in some countries) doesn't kill live data. Returns the
+// first source that answers; throws only if every source fails.
 async function fetchCandles(symbol, interval = "1d", limit = 400) {
+  const sources = [
+    { name: "Binance", fn: fromBinance },
+    { name: "Coinbase", fn: fromCoinbase },
+    { name: "Kraken", fn: fromKraken },
+  ];
+  const errors = [];
+  for (const s of sources) {
+    try {
+      const c = await s.fn(symbol, interval, limit);
+      if (c && c.length) {
+        c._source = s.name;
+        return c;
+      }
+    } catch (e) {
+      errors.push(`${s.name}: ${e.message}`);
+    }
+  }
+  throw new Error(errors.join(" | ") || "No candle data from any source.");
+}
+
+async function fromBinance(symbol, interval, limit) {
   const url = `${BINANCE}/klines?symbol=${encodeURIComponent(
     symbol
   )}&interval=${INTERVALS[interval] || "1d"}&limit=${limit}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Binance ${res.status}: ${await safeText(res)}`);
+  if (!res.ok) throw new Error(`${res.status}`);
   const raw = await res.json();
-  if (!Array.isArray(raw) || raw.length === 0) throw new Error("No candle data returned.");
+  if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
   return raw.map((k) => ({
     time: k[0],
     open: +k[1],
@@ -565,6 +589,66 @@ async function fetchCandles(symbol, interval = "1d", limit = 400) {
     close: +k[4],
     volume: +k[5],
   }));
+}
+
+// Coinbase Exchange public candles. product e.g. BTC-USD; granularity in seconds.
+const CB_GRAN = { "15m": 900, "1h": 3600, "4h": 21600, "1d": 86400, "1w": 86400 };
+async function fromCoinbase(symbol, interval, limit) {
+  const product = toDashPair(symbol);
+  const gran = CB_GRAN[interval] || 86400;
+  const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=${gran}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status}`);
+  const raw = await res.json(); // [ time, low, high, open, close, volume ], newest first
+  if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
+  return raw
+    .map((k) => ({
+      time: k[0] * 1000,
+      low: +k[1],
+      high: +k[2],
+      open: +k[3],
+      close: +k[4],
+      volume: +k[5],
+    }))
+    .sort((a, b) => a.time - b.time)
+    .slice(-limit);
+}
+
+// Kraken public OHLC. pair e.g. XBTUSD; interval in minutes.
+const KR_MIN = { "15m": 15, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080 };
+async function fromKraken(symbol, interval, limit) {
+  const pair = toKrakenPair(symbol);
+  const mins = KR_MIN[interval] || 1440;
+  const url = `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${mins}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status}`);
+  const data = await res.json();
+  if (data.error && data.error.length) throw new Error(data.error.join(","));
+  const key = Object.keys(data.result).find((k) => k !== "last");
+  const raw = data.result[key]; // [time, open, high, low, close, vwap, volume, count]
+  if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
+  return raw
+    .map((k) => ({
+      time: k[0] * 1000,
+      open: +k[1],
+      high: +k[2],
+      low: +k[3],
+      close: +k[4],
+      volume: +k[6],
+    }))
+    .slice(-limit);
+}
+
+// BTCUSDT -> BTC-USD  (Coinbase uses USD, not USDT)
+function toDashPair(symbol) {
+  const base = symbol.replace(/(USDT|BUSD|USDC|USD)$/i, "");
+  return `${base}-USD`;
+}
+// BTCUSDT -> XBTUSD  (Kraken quirk: BTC is XBT)
+function toKrakenPair(symbol) {
+  let base = symbol.replace(/(USDT|BUSD|USDC|USD)$/i, "");
+  if (base === "BTC") base = "XBT";
+  return `${base}USD`;
 }
 
 // Fundamentals for crypto via CoinGecko. `coingeckoId` e.g. "bitcoin".
@@ -1035,7 +1119,7 @@ async function run() {
   let source;
   try {
     candles = await fetchCandles(symbol, interval, 400);
-    source = "Binance (live)";
+    source = `${candles._source || "Exchange"} (live)`;
   } catch (err) {
     candles = syntheticCandles(symbol + interval, 400);
     source = "Synthetic demo data (live fetch failed)";

@@ -48,7 +48,7 @@ async function run() {
   let source;
   try {
     candles = await fetchCandles(symbol, interval, 400);
-    source = "Binance (live)";
+    source = `${candles._source || "Exchange"} (live)`;
   } catch (err) {
     candles = syntheticCandles(symbol + interval, 400);
     source = "Synthetic demo data (live fetch failed)";
