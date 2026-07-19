@@ -159,8 +159,12 @@ function clamp(v, lo = -1, hi = 1) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+export const VOTER_KEYS = ["trend", "macd", "rsi", "stoch", "bollinger", "emaCross", "obv"];
+
 // Main entry: candles = [{time, open, high, low, close, volume}, ...]
-export function analyze(candles) {
+// opts.voters — optional array of voter keys to include (tier gating). When
+// omitted, all voters are used.
+export function analyze(candles, opts = {}) {
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
@@ -194,10 +198,12 @@ export function analyze(candles) {
   // Weighted composite. Trend-following components (trend, macd, emaCross) are
   // scaled by the ADX multiplier; oscillators are not (they work in ranges).
   const trendFollowers = new Set(["trend", "macd", "emaCross"]);
+  const allowed = Array.isArray(opts.voters) ? new Set(opts.voters) : null;
   let composite = 0;
   let weightSum = 0;
   const breakdown = [];
   for (const key of Object.keys(votes)) {
+    if (allowed && !allowed.has(key)) continue;
     const w = WEIGHTS[key];
     const mult = trendFollowers.has(key) ? adxInfo.mult : 1;
     const contribution = votes[key].vote * w * mult;
@@ -240,6 +246,8 @@ export function analyze(candles) {
 
   breakdown.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
 
+  const plainEnglish = buildPlainEnglish(action, Math.round(score), confidence, breakdown, adxInfo, plan);
+
   return {
     score: Math.round(score),
     action,
@@ -248,6 +256,7 @@ export function analyze(candles) {
     breakdown,
     adx: adxInfo,
     plan,
+    plainEnglish,
     snapshot: {
       rsi: ta.last(ind.rsi),
       macdHist: ta.last(ind.macd.histogram),
@@ -259,6 +268,45 @@ export function analyze(candles) {
     },
     indicators: ind,
   };
+}
+
+// Translate the numbers into a couple of plain sentences (Pro perk).
+function buildPlainEnglish(action, score, confidence, breakdown, adxInfo, plan) {
+  const bulls = breakdown.filter((b) => b.vote > 0.15).map((b) => prettyVoter(b.name));
+  const bears = breakdown.filter((b) => b.vote < -0.15).map((b) => prettyVoter(b.name));
+  const lean = score > 0 ? "bullish" : score < 0 ? "bearish" : "mixed";
+  const strength =
+    Math.abs(score) >= 45 ? "strongly" : Math.abs(score) >= 18 ? "moderately" : "only slightly";
+
+  let s = `The signals lean ${strength} ${lean} right now (score ${score >= 0 ? "+" : ""}${score}, ${confidence}% agreement). `;
+  if (bulls.length) s += `Pushing up: ${bulls.join(", ")}. `;
+  if (bears.length) s += `Pushing down: ${bears.join(", ")}. `;
+  s += adxInfo.adx != null
+    ? adxInfo.adx > 25
+      ? "The trend is strong, so trend-following signals carry more weight. "
+      : "The market looks choppy/rangebound, so treat breakout signals with caution. "
+    : "";
+  if (plan && plan.side !== "FLAT") {
+    s += `If you act, the plan is to go ${plan.side.toLowerCase()} near ${fmt(plan.entry)}, cut the trade if it hits ${fmt(
+      plan.stop
+    )}, and aim for ${fmt(plan.target)} — risking about ${plan.riskPct.toFixed(1)}% to make roughly double that. `;
+  } else {
+    s += "There's no clear edge, so the disciplined move is to wait for a cleaner setup. ";
+  }
+  s += "Always size positions so a single loss is survivable.";
+  return s;
+}
+
+function prettyVoter(k) {
+  return {
+    trend: "moving-average trend",
+    macd: "MACD momentum",
+    rsi: "RSI",
+    stoch: "Stochastic",
+    bollinger: "Bollinger Bands",
+    emaCross: "EMA crossover",
+    obv: "volume flow",
+  }[k] || k;
 }
 
 function buildTradePlan(action, price, atrVal) {

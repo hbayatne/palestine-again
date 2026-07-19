@@ -195,117 +195,236 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 }
 .disclaimer strong { color: var(--sell); }
 
-.demo-banner{background:rgba(209,183,58,.12);border:1px solid rgba(209,183,58,.4);color:#e8d67a;border-radius:10px;padding:11px 14px;font-size:13px;margin:0 0 14px;line-height:1.5;}
+/* ===== Header user bar ===== */
+.userbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.user-email { font-size: 12px; color: var(--muted); }
+.tier-badge { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 20px; }
+.tier-badge.t-free { background: rgba(138,148,166,0.18); color: #b9c2d0; }
+.tier-badge.t-lite { background: rgba(76,154,255,0.18); color: #8bb8ff; }
+.tier-badge.t-pro { background: linear-gradient(90deg,#f5a623,#16c784); color: #06210f; }
+.btn-upgrade { background: linear-gradient(180deg,#f5a623,#e0890f); border: none; color: #241400; font-weight: 700;
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+.owner-viewas select { padding: 6px 9px; font-size: 12px; }
+
+/* ===== Auth overlay ===== */
+.auth-overlay { position: fixed; inset: 0; z-index: 50;
+  background: radial-gradient(900px 500px at 60% -10%, #16202e 0%, #0b0e13 60%);
+  display: flex; align-items: center; justify-content: center; padding: 20px; }
+.auth-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 30px 28px; width: 100%; max-width: 380px; }
+.auth-brand { font-size: 20px; font-weight: 800; margin-bottom: 18px; }
+.auth-brand .spark, .spark { color: var(--accent); }
+.auth-card h2 { margin: 0 0 16px; font-size: 20px; }
+.auth-card form { display: flex; flex-direction: column; gap: 10px; }
+.auth-card input { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  padding: 11px 12px; border-radius: 9px; font-size: 14px; }
+.auth-card input:focus { border-color: var(--accent); outline: none; }
+.auth-card button[type=submit] { background: linear-gradient(180deg,#4c9aff,#2f7de0); border: none; color: #fff;
+  font-weight: 600; padding: 11px; border-radius: 9px; cursor: pointer; font-size: 14px; margin-top: 4px; }
+.auth-error { color: var(--sell); font-size: 12.5px; min-height: 16px; }
+.auth-toggle { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.auth-toggle a { color: var(--accent); text-decoration: none; }
+.auth-fine { margin-top: 16px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+/* ===== Examples line ===== */
+.examples { margin: 10px 2px 0; font-size: 12px; color: var(--muted); line-height: 1.9; }
+.examples code { background: var(--panel2); border: 1px solid var(--border); border-radius: 5px;
+  padding: 1px 6px; font-size: 11.5px; color: #cdd6e4; }
+
+/* ===== Locked / upsell states ===== */
+.locked-stat { opacity: 0.55; }
+.upsell { text-align: center; padding: 22px 14px; color: var(--muted); font-size: 13px; cursor: pointer;
+  border: 1px dashed var(--border); border-radius: 10px; line-height: 1.6; }
+.upsell:hover { border-color: var(--accent); color: var(--text); }
+.upsell-cta { color: var(--accent); font-weight: 600; }
+.lock-row { text-align: center; color: var(--muted); font-size: 12.5px; cursor: pointer;
+  background: rgba(76,154,255,0.05); border-radius: 8px; padding: 12px !important; }
+.lock-row:hover { color: var(--text); }
+.plain-english { font-size: 14.5px; line-height: 1.7; color: var(--text); margin: 0; }
+
+/* ===== Backend note ===== */
+.backend-note { margin-top: 14px; background: rgba(76,154,255,0.07); border: 1px solid rgba(76,154,255,0.25);
+  border-radius: 12px; padding: 13px 16px; font-size: 12.5px; color: #a9c6f2; line-height: 1.6; }
+
+/* ===== Pricing modal ===== */
+.modal { position: fixed; inset: 0; z-index: 60; background: rgba(6,9,14,0.75);
+  display: flex; align-items: center; justify-content: center; padding: 20px; overflow: auto; }
+.modal-inner { background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 26px; max-width: 900px; width: 100%; position: relative; }
+.modal-close { position: absolute; top: 14px; right: 16px; background: none; border: none; color: var(--muted);
+  font-size: 18px; cursor: pointer; }
+.modal-title { margin: 0 0 4px; }
+.modal-sub { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+.pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 720px) { .pricing-grid { grid-template-columns: 1fr; } }
+.tier-card { background: var(--panel2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.tier-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.tier-card.t-pro { background: linear-gradient(180deg, rgba(245,166,35,0.06), var(--panel2)); }
+.tier-name { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.tier-price { font-size: 30px; font-weight: 800; margin: 6px 0; }
+.tier-price span { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.tier-tagline { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.tier-perks { list-style: none; padding: 0; margin: 0 0 18px; font-size: 13px; line-height: 1.5; }
+.tier-perks li { padding: 5px 0 5px 22px; position: relative; }
+.tier-perks li.yes::before { content: "✓"; position: absolute; left: 0; color: var(--buy); font-weight: 700; }
+.tier-perks li.no { color: var(--muted); }
+.tier-perks li.no::before { content: "✕"; position: absolute; left: 0; color: var(--sell); }
+.tier-btn { width: 100%; padding: 11px; border-radius: 9px; border: none; cursor: pointer; font-weight: 600;
+  font-size: 14px; background: linear-gradient(180deg,#4c9aff,#2f7de0); color: #fff; }
+.tier-btn.current { background: var(--panel); color: var(--muted); border: 1px solid var(--border); cursor: default; }
+
+/* ===== Demo-data banner ===== */
+.demo-banner { background: rgba(209,183,58,.12); border: 1px solid rgba(209,183,58,.4); color: #e8d67a;
+  border-radius: 10px; padding: 11px 14px; font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
+
 </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1><span class="spark">▲</span> SignalDesk</h1>
-      <div class="sub">Multi-indicator buy / sell signal engine · technicals + fundamentals</div>
+  <!-- ===== Auth overlay ===== -->
+  <div id="authOverlay" class="auth-overlay hidden">
+    <div class="auth-card">
+      <div class="auth-brand"><span class="spark">▲</span> SignalDesk</div>
+      <h2 id="authTitle">Create your account</h2>
+      <form id="authForm" data-mode="signup">
+        <input id="authEmail" type="email" placeholder="you@email.com" autocomplete="email" required />
+        <input id="authPass" type="password" placeholder="Password (min 4 chars)" autocomplete="current-password" required />
+        <div id="authError" class="auth-error"></div>
+        <button id="authSubmit" type="submit">Sign up — free</button>
+      </form>
+      <div id="authToggle" class="auth-toggle"></div>
+      <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required. See the note at the bottom of the app about real payments.</p>
     </div>
-  </header>
+  </div>
 
-  <div class="wrap">
-      <div id="demoBanner" class="demo-banner hidden">⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source. If you opened this file in <b>Safari</b>, try <b>Google Chrome</b> instead (Safari blocks downloaded files from loading live data). Otherwise a network/firewall may be blocking the exchanges.</div>
-    <div class="controls">
-      <div class="field">
-        <label for="preset">Quick pick</label>
-        <select id="preset">
-          <option value="">— choose asset —</option>
-        </select>
+  <!-- ===== App ===== -->
+  <div id="appRoot" class="hidden">
+    <header>
+      <div>
+        <h1><span class="spark">▲</span> SignalDesk</h1>
+        <div class="sub">Multi-indicator buy / sell signal engine · any asset · technicals + fundamentals</div>
       </div>
-      <div class="field">
-        <label for="symbol">Symbol (Binance)</label>
-        <input id="symbol" value="BTCUSDT" spellcheck="false" />
+      <div class="userbar">
+        <span id="ownerViewAs" class="owner-viewas hidden">
+          <select id="viewAsSel"></select>
+        </span>
+        <span id="tierBadge" class="tier-badge t-free">FREE</span>
+        <span id="userEmail" class="user-email"></span>
+        <button id="upgradeBtn" class="btn-upgrade">Upgrade</button>
+        <button id="logoutBtn" class="btn-ghost">Log out</button>
       </div>
-      <div class="field">
-        <label for="interval">Timeframe</label>
-        <select id="interval">
-          <option value="15m">15m</option>
-          <option value="1h">1h</option>
-          <option value="4h">4h</option>
-          <option value="1d" selected>1d</option>
-          <option value="1w">1w</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>&nbsp;</label>
-        <label class="checkline"><input type="checkbox" id="useFundamentals" checked /> Include fundamentals</label>
-      </div>
-      <div class="field">
-        <label>&nbsp;</label>
-        <button id="analyzeBtn">Analyze</button>
-      </div>
-    </div>
+    </header>
 
-    <div id="status" class="status">Ready.</div>
+    <div class="wrap">
+      <div id="demoBanner" class="demo-banner hidden">
+        ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source. If you opened
+        this as a downloaded file in <b>Safari</b>, try <b>Chrome</b> or the hosted link instead.
+      </div>
 
-    <div id="results" class="hidden">
-      <div class="grid">
-        <!-- Verdict -->
-        <div class="card verdict-card">
-          <h2>Signal</h2>
-          <div id="verdict" class="verdict hold">—</div>
-          <div class="verdict-stats">
-            <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
-            <div><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
-            <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+      <div class="controls">
+        <div class="field">
+          <label for="preset">Quick pick</label>
+          <select id="preset"></select>
+        </div>
+        <div class="field">
+          <label for="symbol">Symbol (any asset)</label>
+          <input id="symbol" value="BTCUSDT" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label for="interval">Timeframe</label>
+          <select id="interval"></select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="analyzeBtn">Analyze</button>
+        </div>
+      </div>
+      <div class="examples">
+        Try: <code>AAPL</code> <code>TSLA</code> <code>NVDA</code> <code>SPY</code> (stocks/ETFs) ·
+        <code>BTCUSDT</code> <code>ETHUSDT</code> (crypto) ·
+        <code>EURUSD=X</code> (forex) · <code>GC=F</code> gold · <code>^GSPC</code> S&amp;P 500
+      </div>
+
+      <div id="status" class="status">Loading…</div>
+
+      <div id="results" class="hidden">
+        <div class="grid">
+          <div class="card verdict-card">
+            <h2>Signal</h2>
+            <div id="verdict" class="verdict hold">—</div>
+            <div class="verdict-stats">
+              <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
+              <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
+              <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+            </div>
+            <div>
+              <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
+              <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+            </div>
           </div>
-          <div>
-            <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
-            <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+
+          <div class="card" id="planCard">
+            <h2>Suggested trade plan (ATR-based)</h2>
+            <div id="plan"></div>
+          </div>
+
+          <div class="card chart-card hidden" id="plainEnglishCard">
+            <h2>📖 Plain-English summary</h2>
+            <p id="plainEnglish" class="plain-english"></p>
+          </div>
+
+          <div class="card chart-card">
+            <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+            <canvas id="chart"></canvas>
+          </div>
+
+          <div class="card">
+            <h2>Indicator snapshot</h2>
+            <div id="snapshot" class="metrics"></div>
+          </div>
+
+          <div class="card" id="fundamentals">
+            <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
+            <div id="fundMetrics" class="metrics"></div>
+            <ul id="fundReasons" class="fund-reasons"></ul>
+          </div>
+
+          <div class="card chart-card">
+            <h2>Why — weighted indicator breakdown</h2>
+            <div id="breakdown"></div>
+            <div id="adxNote" class="adx-note"></div>
+            <div id="blendNote" class="blend-note"></div>
           </div>
         </div>
 
-        <!-- Trade plan -->
-        <div class="card">
-          <h2>Suggested trade plan (ATR-based)</h2>
-          <div id="plan"></div>
+        <div class="disclaimer">
+          <strong>Not financial advice.</strong> SignalDesk is an educational technical-analysis tool. It computes
+          well-known indicators and combines them mechanically — it does <em>not</em> predict the future, and no
+          indicator setup produces guaranteed or "high-percentage" wins. Signals can and will be wrong. Never risk
+          money you can't afford to lose, always use a stop-loss, and do your own research.
         </div>
-
-        <!-- Chart -->
-        <div class="card chart-card">
-          <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
-          <canvas id="chart"></canvas>
+        <div class="backend-note">
+          💡 <b>For monetization:</b> the plans below and the sign-in above are a working front-end demo. Real,
+          enforceable subscriptions need a small backend (user auth + a payment provider like Stripe) so plans can't
+          be bypassed by editing the page. The code is structured to plug into that when you're ready.
         </div>
-
-        <!-- Snapshot -->
-        <div class="card">
-          <h2>Indicator snapshot</h2>
-          <div id="snapshot" class="metrics"></div>
-        </div>
-
-        <!-- Fundamentals -->
-        <div class="card" id="fundamentals">
-          <h2>Fundamentals <span id="fundScore" class="mini-score">0</span></h2>
-          <div id="fundMetrics" class="metrics"></div>
-          <ul id="fundReasons" class="fund-reasons"></ul>
-        </div>
-
-        <!-- Breakdown -->
-        <div class="card chart-card">
-          <h2>Why — weighted indicator breakdown</h2>
-          <div id="breakdown"></div>
-          <div id="adxNote" class="adx-note"></div>
-          <div id="blendNote" class="blend-note"></div>
-        </div>
-      </div>
-
-      <div class="disclaimer">
-        <strong>Not financial advice.</strong> SignalDesk is an educational technical-analysis tool.
-        It computes well-known indicators and combines them mechanically — it does <em>not</em> predict
-        the future, and no indicator setup produces guaranteed or "high-percentage" wins. Markets are
-        driven by news, liquidity and randomness that no chart can foresee. Signals can and will be wrong.
-        Never risk money you can't afford to lose, always use a stop-loss, and do your own research.
       </div>
     </div>
   </div>
 
-  <script>
-// --- module glue: reconstruct the `ta` namespace used by the signal engine ---
-const ta = { sma, ema, rsi, macd, bollinger, stochastic, atr, obv, adx, last, prev };
+  <!-- ===== Pricing modal ===== -->
+  <div id="pricingModal" class="modal hidden">
+    <div class="modal-inner">
+      <button id="closePricing" class="modal-close">✕</button>
+      <h2 class="modal-title">Choose your plan</h2>
+      <p class="modal-sub">More analysis and clearer signals as you go up. (Demo — no real charge.)</p>
+      <div id="pricingGrid" class="pricing-grid"></div>
+    </div>
+  </div>
 
+  <script>
 // indicators.js
 // Pure technical-analysis math. Every function takes plain number arrays and
 // returns arrays aligned to the input length (leading values are `null` until
@@ -527,6 +646,211 @@ function prev(arr) {
   return null;
 }
 
+
+// tiers.js — subscription plan definitions and the feature matrix.
+// Higher tiers unlock more indicators, more timeframes, and richer, easier-to-
+// read output. Prices are placeholders for when the product is monetized.
+
+const TIERS = {
+  free: {
+    id: "free",
+    name: "Free",
+    price: "$0",
+    priceNote: "forever",
+    tagline: "Get a feel for the market.",
+    // which indicator voters feed the signal
+    voters: ["trend", "rsi", "macd"],
+    timeframes: ["1d"],
+    confidence: false,
+    tradePlan: false,
+    fundamentals: false,
+    plainEnglish: false,
+    chart: true,
+    perks: [
+      "Buy / Sell / Hold signal",
+      "3 core indicators",
+      "Daily timeframe",
+      "Any asset (stocks, crypto, forex)",
+    ],
+    locked: [
+      "Confidence score",
+      "Trade plan (entry / stop / target)",
+      "Full indicator suite",
+      "Fundamentals",
+    ],
+  },
+  lite: {
+    id: "lite",
+    name: "Lite",
+    price: "$9",
+    priceNote: "/month",
+    tagline: "For the active trader.",
+    voters: ["trend", "rsi", "macd", "stoch", "bollinger", "emaCross"],
+    timeframes: ["1h", "4h", "1d", "1w"],
+    confidence: true,
+    tradePlan: true,
+    fundamentals: false,
+    plainEnglish: false,
+    chart: true,
+    perks: [
+      "Everything in Free, plus:",
+      "6 indicators",
+      "Confidence score",
+      "ATR trade plan (entry / stop / target)",
+      "Hourly → weekly timeframes",
+    ],
+    locked: ["Fundamentals analysis", "Plain-English summary", "15-minute timeframe"],
+  },
+  pro: {
+    id: "pro",
+    name: "Pro",
+    price: "$29",
+    priceNote: "/month",
+    tagline: "The full trading desk.",
+    voters: "all",
+    timeframes: ["15m", "1h", "4h", "1d", "1w"],
+    confidence: true,
+    tradePlan: true,
+    fundamentals: true,
+    plainEnglish: true,
+    chart: true,
+    perks: [
+      "Everything in Lite, plus:",
+      "Full 7-indicator suite + ADX trend gate",
+      "Fundamentals scoring & blend",
+      "Plain-English signal summary",
+      "All timeframes incl. 15-minute",
+    ],
+    locked: [],
+  },
+};
+
+const TIER_ORDER = ["free", "lite", "pro"];
+
+function tierRank(id) {
+  return TIER_ORDER.indexOf(id);
+}
+
+// Given a tier and the full list of voter keys, return the allowed subset.
+function allowedVoters(tier, allKeys) {
+  if (!tier || tier.voters === "all") return allKeys.slice();
+  return allKeys.filter((k) => tier.voters.includes(k));
+}
+
+
+// auth.js — lightweight, browser-only account + subscription state.
+//
+// IMPORTANT (honesty): this is a front-end DEMO of sign-up and tiers. Accounts
+// live in the browser's localStorage and the "password" is only lightly hashed.
+// It is NOT secure and CANNOT enforce real payments — anyone can read the page
+// source. For real monetization, wire these same calls to a backend (auth API +
+// Stripe). The function surface here is deliberately backend-shaped so that swap
+// is straightforward: signup / login / logout / getState / setTier.
+
+const STORE_KEY = "signaldesk_users_v1";
+const SESSION_KEY = "signaldesk_session_v1";
+const VIEWAS_KEY = "signaldesk_viewas_v1";
+
+// The owner gets everything free. Change/add emails here (or move to a backend).
+const OWNER_EMAILS = ["hbayatne@icloud.com"];
+
+function readUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+function writeUsers(u) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(u));
+}
+
+// Deliberately weak hash — this is a demo, not real security.
+function hash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
+function isOwnerEmail(email) {
+  return OWNER_EMAILS.includes((email || "").trim().toLowerCase());
+}
+
+function normalize(email) {
+  return (email || "").trim().toLowerCase();
+}
+
+function signup(email, password) {
+  email = normalize(email);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Enter a valid email." };
+  if (!password || password.length < 4) return { error: "Password must be at least 4 characters." };
+  const users = readUsers();
+  if (users[email]) return { error: "An account with this email already exists. Try logging in." };
+  const tier = isOwnerEmail(email) ? "pro" : "free";
+  users[email] = { email, pass: hash(password), tier, owner: isOwnerEmail(email), created: Date.now() };
+  writeUsers(users);
+  localStorage.setItem(SESSION_KEY, email);
+  return { user: users[email] };
+}
+
+function login(email, password) {
+  email = normalize(email);
+  const users = readUsers();
+  const u = users[email];
+  if (!u) return { error: "No account found. Please sign up first." };
+  if (u.pass !== hash(password)) return { error: "Incorrect password." };
+  // keep owner flag fresh even if owner list changed
+  u.owner = isOwnerEmail(email);
+  if (u.owner) u.tier = "pro";
+  users[email] = u;
+  writeUsers(users);
+  localStorage.setItem(SESSION_KEY, email);
+  return { user: u };
+}
+
+function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(VIEWAS_KEY);
+}
+
+function getUser() {
+  const email = localStorage.getItem(SESSION_KEY);
+  if (!email) return null;
+  const u = readUsers()[email];
+  return u || null;
+}
+
+// Set the account's real tier (demo "subscribe"/"upgrade"). In production this
+// would be driven by a payment webhook, not the client.
+function setTier(tierId) {
+  const email = localStorage.getItem(SESSION_KEY);
+  if (!email) return null;
+  const users = readUsers();
+  if (!users[email]) return null;
+  users[email].tier = tierId;
+  writeUsers(users);
+  return users[email];
+}
+
+// Owner-only "preview as tier" — lets the owner see exactly what each plan shows
+// without changing their real (Pro) account. Non-owners ignore this.
+function setViewAs(tierId) {
+  if (tierId) localStorage.setItem(VIEWAS_KEY, tierId);
+  else localStorage.removeItem(VIEWAS_KEY);
+}
+function getViewAs() {
+  return localStorage.getItem(VIEWAS_KEY) || null;
+}
+
+// The tier whose features should actually be applied right now.
+function effectiveTierId() {
+  const u = getUser();
+  if (!u) return "free";
+  if (u.owner) return getViewAs() || "pro";
+  return u.tier || "free";
+}
+
+
 // data.js
 // Fetches real OHLCV candles and fundamental metrics. Uses public, key-free,
 // CORS-enabled endpoints so the app runs from a static file with no backend.
@@ -540,6 +864,18 @@ function prev(arr) {
 const BINANCE = "https://api.binance.com/api/v3";
 const COINGECKO = "https://api.coingecko.com/api/v3";
 
+// fetch with a hard timeout so a dead/blocked source fails fast instead of
+// hanging the whole fallback chain.
+async function tfetch(url, ms = 6000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 // Map friendly interval -> Binance kline interval
 const INTERVALS = {
   "15m": "15m",
@@ -552,12 +888,24 @@ const INTERVALS = {
 // Tries several public exchanges in order so a regional block on one (e.g.
 // Binance is unavailable in some countries) doesn't kill live data. Returns the
 // first source that answers; throws only if every source fails.
+function looksLikeCrypto(symbol) {
+  return /(USDT|USDC|BUSD)$/i.test(symbol);
+}
+
 async function fetchCandles(symbol, interval = "1d", limit = 400) {
-  const sources = [
-    { name: "Binance", fn: fromBinance },
-    { name: "Coinbase", fn: fromCoinbase },
-    { name: "Kraken", fn: fromKraken },
-  ];
+  // Crypto pairs go to native exchanges first (fast, no proxy needed); every
+  // asset type also falls back to Yahoo, which covers stocks, ETFs, forex,
+  // indices, commodities AND crypto.
+  const sources = [];
+  if (looksLikeCrypto(symbol)) {
+    sources.push(
+      { name: "Binance", fn: fromBinance },
+      { name: "Coinbase", fn: fromCoinbase },
+      { name: "Kraken", fn: fromKraken }
+    );
+  }
+  sources.push({ name: "Yahoo", fn: fromYahoo });
+
   const errors = [];
   for (const s of sources) {
     try {
@@ -577,7 +925,7 @@ async function fromBinance(symbol, interval, limit) {
   const url = `${BINANCE}/klines?symbol=${encodeURIComponent(
     symbol
   )}&interval=${INTERVALS[interval] || "1d"}&limit=${limit}`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
   const raw = await res.json();
   if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
@@ -597,7 +945,7 @@ async function fromCoinbase(symbol, interval, limit) {
   const product = toDashPair(symbol);
   const gran = CB_GRAN[interval] || 86400;
   const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=${gran}`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
   const raw = await res.json(); // [ time, low, high, open, close, volume ], newest first
   if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
@@ -620,7 +968,7 @@ async function fromKraken(symbol, interval, limit) {
   const pair = toKrakenPair(symbol);
   const mins = KR_MIN[interval] || 1440;
   const url = `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${mins}`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
   const data = await res.json();
   if (data.error && data.error.length) throw new Error(data.error.join(","));
@@ -651,13 +999,102 @@ function toKrakenPair(symbol) {
   return `${base}USD`;
 }
 
+// --- Yahoo Finance: the universal source (stocks, ETFs, forex, indices,
+// commodities, crypto). Yahoo doesn't send CORS headers, so we route through
+// public CORS proxies and try them in order for resilience. ---
+const YF_PROXIES = [
+  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+  (u) => u, // last resort: hit Yahoo directly (works if CORS ever allows it)
+];
+const YF_MAP = {
+  "15m": { i: "15m", r: "1mo", agg: 1 },
+  "1h": { i: "60m", r: "3mo", agg: 1 },
+  "4h": { i: "60m", r: "1y", agg: 4 }, // Yahoo has no 4h; aggregate 4×1h
+  "1d": { i: "1d", r: "2y", agg: 1 },
+  "1w": { i: "1wk", r: "5y", agg: 1 },
+};
+
+// BTCUSDT -> BTC-USD for Yahoo; other symbols (AAPL, EURUSD=X, GC=F, ^GSPC) pass through.
+function toYahooSymbol(sym) {
+  if (looksLikeCrypto(sym)) return sym.replace(/(USDT|USDC|BUSD)$/i, "-USD");
+  return sym;
+}
+
+async function fromYahoo(symbol, interval, limit) {
+  const m = YF_MAP[interval] || YF_MAP["1d"];
+  const ysym = toYahooSymbol(symbol);
+  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
+  let lastErr = "";
+  for (const host of hosts) {
+    const target = `https://${host}/v8/finance/chart/${encodeURIComponent(
+      ysym
+    )}?range=${m.r}&interval=${m.i}`;
+    for (const wrap of YF_PROXIES) {
+      try {
+        const res = await tfetch(wrap(target), 5000);
+        if (!res.ok) {
+          lastErr = `${res.status}`;
+          continue;
+        }
+        const json = await res.json();
+        const parsed = parseYahoo(json, m.agg, limit);
+        if (parsed && parsed.length) return parsed;
+        lastErr = "no rows";
+      } catch (e) {
+        lastErr = e.message;
+      }
+    }
+  }
+  throw new Error(lastErr || "unreachable");
+}
+
+function parseYahoo(json, agg, limit) {
+  const r = json && json.chart && json.chart.result && json.chart.result[0];
+  if (!r || !r.timestamp) {
+    const desc = json && json.chart && json.chart.error && json.chart.error.description;
+    throw new Error(desc || "invalid symbol");
+  }
+  const q = r.indicators.quote[0];
+  let candles = r.timestamp
+    .map((t, i) => ({
+      time: t * 1000,
+      open: q.open[i],
+      high: q.high[i],
+      low: q.low[i],
+      close: q.close[i],
+      volume: q.volume[i] || 0,
+    }))
+    .filter((c) => c.open != null && c.close != null && c.high != null && c.low != null);
+  if (agg > 1) candles = aggregateCandles(candles, agg);
+  return candles.slice(-limit);
+}
+
+function aggregateCandles(c, n) {
+  const out = [];
+  for (let i = 0; i < c.length; i += n) {
+    const g = c.slice(i, i + n);
+    if (!g.length) continue;
+    out.push({
+      time: g[0].time,
+      open: g[0].open,
+      high: Math.max(...g.map((x) => x.high)),
+      low: Math.min(...g.map((x) => x.low)),
+      close: g[g.length - 1].close,
+      volume: g.reduce((s, x) => s + x.volume, 0),
+    });
+  }
+  return out;
+}
+
 // Fundamentals for crypto via CoinGecko. `coingeckoId` e.g. "bitcoin".
 async function fetchFundamentals(coingeckoId) {
   if (!coingeckoId) return null;
   const url = `${COINGECKO}/coins/${encodeURIComponent(
     coingeckoId
   )}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
   const d = await res.json();
   const m = d.market_data || {};
@@ -770,6 +1207,7 @@ async function safeText(res) {
     return "";
   }
 }
+
 
 // signals.js
 // Turns raw indicators into a transparent, weighted BUY / SELL / HOLD decision.
@@ -931,8 +1369,12 @@ function clamp(v, lo = -1, hi = 1) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+const VOTER_KEYS = ["trend", "macd", "rsi", "stoch", "bollinger", "emaCross", "obv"];
+
 // Main entry: candles = [{time, open, high, low, close, volume}, ...]
-function analyze(candles) {
+// opts.voters — optional array of voter keys to include (tier gating). When
+// omitted, all voters are used.
+function analyze(candles, opts = {}) {
   const closes = candles.map((c) => c.close);
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
@@ -966,10 +1408,12 @@ function analyze(candles) {
   // Weighted composite. Trend-following components (trend, macd, emaCross) are
   // scaled by the ADX multiplier; oscillators are not (they work in ranges).
   const trendFollowers = new Set(["trend", "macd", "emaCross"]);
+  const allowed = Array.isArray(opts.voters) ? new Set(opts.voters) : null;
   let composite = 0;
   let weightSum = 0;
   const breakdown = [];
   for (const key of Object.keys(votes)) {
+    if (allowed && !allowed.has(key)) continue;
     const w = WEIGHTS[key];
     const mult = trendFollowers.has(key) ? adxInfo.mult : 1;
     const contribution = votes[key].vote * w * mult;
@@ -1012,6 +1456,8 @@ function analyze(candles) {
 
   breakdown.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
 
+  const plainEnglish = buildPlainEnglish(action, Math.round(score), confidence, breakdown, adxInfo, plan);
+
   return {
     score: Math.round(score),
     action,
@@ -1020,6 +1466,7 @@ function analyze(candles) {
     breakdown,
     adx: adxInfo,
     plan,
+    plainEnglish,
     snapshot: {
       rsi: ta.last(ind.rsi),
       macdHist: ta.last(ind.macd.histogram),
@@ -1031,6 +1478,45 @@ function analyze(candles) {
     },
     indicators: ind,
   };
+}
+
+// Translate the numbers into a couple of plain sentences (Pro perk).
+function buildPlainEnglish(action, score, confidence, breakdown, adxInfo, plan) {
+  const bulls = breakdown.filter((b) => b.vote > 0.15).map((b) => prettyVoter(b.name));
+  const bears = breakdown.filter((b) => b.vote < -0.15).map((b) => prettyVoter(b.name));
+  const lean = score > 0 ? "bullish" : score < 0 ? "bearish" : "mixed";
+  const strength =
+    Math.abs(score) >= 45 ? "strongly" : Math.abs(score) >= 18 ? "moderately" : "only slightly";
+
+  let s = `The signals lean ${strength} ${lean} right now (score ${score >= 0 ? "+" : ""}${score}, ${confidence}% agreement). `;
+  if (bulls.length) s += `Pushing up: ${bulls.join(", ")}. `;
+  if (bears.length) s += `Pushing down: ${bears.join(", ")}. `;
+  s += adxInfo.adx != null
+    ? adxInfo.adx > 25
+      ? "The trend is strong, so trend-following signals carry more weight. "
+      : "The market looks choppy/rangebound, so treat breakout signals with caution. "
+    : "";
+  if (plan && plan.side !== "FLAT") {
+    s += `If you act, the plan is to go ${plan.side.toLowerCase()} near ${fmt(plan.entry)}, cut the trade if it hits ${fmt(
+      plan.stop
+    )}, and aim for ${fmt(plan.target)} — risking about ${plan.riskPct.toFixed(1)}% to make roughly double that. `;
+  } else {
+    s += "There's no clear edge, so the disciplined move is to wait for a cleaner setup. ";
+  }
+  s += "Always size positions so a single loss is survivable.";
+  return s;
+}
+
+function prettyVoter(k) {
+  return {
+    trend: "moving-average trend",
+    macd: "MACD momentum",
+    rsi: "RSI",
+    stoch: "Stochastic",
+    bollinger: "Bollinger Bands",
+    emaCross: "EMA crossover",
+    obv: "volume flow",
+  }[k] || k;
 }
 
 function buildTradePlan(action, price, atrVal) {
@@ -1075,23 +1561,63 @@ function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
   return Math.round(technicalScore * techWeight + fundamentalScore * (1 - techWeight));
 }
 
-// app.js — UI controller: wires inputs -> data -> signal engine -> render.
+
+// app.js — UI controller: auth gate -> tier gating -> data -> signal -> render.
 
 
-// A few popular assets with their CoinGecko ids for fundamentals.
-const PRESETS = [
-  { symbol: "BTCUSDT", cg: "bitcoin", label: "Bitcoin" },
-  { symbol: "ETHUSDT", cg: "ethereum", label: "Ethereum" },
-  { symbol: "SOLUSDT", cg: "solana", label: "Solana" },
-  { symbol: "BNBUSDT", cg: "binancecoin", label: "BNB" },
-  { symbol: "XRPUSDT", cg: "ripple", label: "XRP" },
-  { symbol: "ADAUSDT", cg: "cardano", label: "Cardano" },
-  { symbol: "DOGEUSDT", cg: "dogecoin", label: "Dogecoin" },
-  { symbol: "AVAXUSDT", cg: "avalanche-2", label: "Avalanche" },
+
+
+// Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
+const PRESET_GROUPS = [
+  {
+    group: "Crypto",
+    items: [
+      { symbol: "BTCUSDT", cg: "bitcoin", label: "Bitcoin" },
+      { symbol: "ETHUSDT", cg: "ethereum", label: "Ethereum" },
+      { symbol: "SOLUSDT", cg: "solana", label: "Solana" },
+      { symbol: "XRPUSDT", cg: "ripple", label: "XRP" },
+      { symbol: "DOGEUSDT", cg: "dogecoin", label: "Dogecoin" },
+    ],
+  },
+  {
+    group: "Stocks & ETFs",
+    items: [
+      { symbol: "AAPL", label: "Apple" },
+      { symbol: "TSLA", label: "Tesla" },
+      { symbol: "NVDA", label: "Nvidia" },
+      { symbol: "MSFT", label: "Microsoft" },
+      { symbol: "AMZN", label: "Amazon" },
+      { symbol: "SPY", label: "S&P 500 ETF" },
+      { symbol: "QQQ", label: "Nasdaq 100 ETF" },
+    ],
+  },
+  {
+    group: "Forex",
+    items: [
+      { symbol: "EURUSD=X", label: "EUR / USD" },
+      { symbol: "GBPUSD=X", label: "GBP / USD" },
+      { symbol: "USDJPY=X", label: "USD / JPY" },
+    ],
+  },
+  {
+    group: "Commodities & Indices",
+    items: [
+      { symbol: "GC=F", label: "Gold" },
+      { symbol: "CL=F", label: "Crude Oil" },
+      { symbol: "^GSPC", label: "S&P 500 Index" },
+    ],
+  },
 ];
+const ALL_PRESETS = PRESET_GROUPS.flatMap((g) => g.items);
+
+const TF_LABELS = { "15m": "15 min", "1h": "1 hour", "4h": "4 hour", "1d": "Daily", "1w": "Weekly" };
 
 const $ = (id) => document.getElementById(id);
 const state = { candles: [], result: null, fundamentals: null };
+
+function currentTier() {
+  return TIERS[auth.effectiveTierId()] || TIERS.free;
+}
 
 function fmt(v, opts = {}) {
   if (v == null || Number.isNaN(v)) return "—";
@@ -1108,10 +1634,14 @@ function fmt(v, opts = {}) {
   return v.toPrecision(4);
 }
 
+// ---------------- Analysis run ----------------
 async function run() {
+  const tier = currentTier();
   const symbol = $("symbol").value.trim().toUpperCase();
-  const interval = $("interval").value;
-  const useFund = $("useFundamentals").checked;
+  if (!symbol) return;
+  let interval = $("interval").value;
+  if (!tier.timeframes.includes(interval)) interval = tier.timeframes[tier.timeframes.length - 1];
+
   setStatus("Fetching market data…", "loading");
   $("analyzeBtn").disabled = true;
 
@@ -1127,30 +1657,28 @@ async function run() {
   }
   state.candles = candles;
 
-  // Fundamentals (best-effort; crypto only)
+  // Fundamentals — Pro only, crypto only (has a CoinGecko id).
   let fundScore = null;
   state.fundamentals = null;
-  if (useFund) {
-    const preset = PRESETS.find((p) => p.symbol === symbol);
-    if (preset) {
-      try {
-        const f = await fetchFundamentals(preset.cg);
-        state.fundamentals = f;
-        fundScore = scoreFundamentals(f);
-      } catch (err) {
-        console.warn("Fundamentals fetch failed:", err);
-      }
+  const preset = ALL_PRESETS.find((p) => p.symbol === symbol);
+  if (tier.fundamentals && preset && preset.cg) {
+    try {
+      const f = await fetchFundamentals(preset.cg);
+      state.fundamentals = f;
+      fundScore = scoreFundamentals(f);
+    } catch (err) {
+      console.warn("Fundamentals fetch failed:", err);
     }
   }
 
-  const result = analyze(candles);
+  const result = analyze(candles, { voters: tier.voters === "all" ? undefined : tier.voters });
   if (fundScore) result.blendedScore = combine(result.score, fundScore.score, 0.7);
   result.fundScore = fundScore;
   state.result = result;
 
-  render(result, source);
+  render(result, symbol, tier);
   setStatus(
-    `${symbol} · ${interval} · ${candles.length} candles · ${source}`,
+    `${symbol} · ${TF_LABELS[interval] || interval} · ${candles.length} candles · ${source}`,
     source.includes("Synthetic") ? "warn" : "ok"
   );
   $("analyzeBtn").disabled = false;
@@ -1164,60 +1692,84 @@ function setStatus(msg, cls) {
   if (banner) banner.classList.toggle("hidden", cls !== "warn");
 }
 
-function render(r, source) {
+// ---------------- Rendering (tier-aware) ----------------
+function render(r, symbol, tier) {
   $("results").classList.remove("hidden");
 
-  // Verdict card
   const finalScore = r.blendedScore != null ? r.blendedScore : r.score;
   const verdict = $("verdict");
   verdict.textContent = r.action;
   verdict.className = "verdict " + verdictClass(r.action);
   $("scoreVal").textContent = (finalScore >= 0 ? "+" : "") + finalScore;
-  $("confVal").textContent = r.confidence + "%";
   $("priceVal").textContent = "$" + fmt(r.price);
 
-  // score gauge fill (-100..100 -> 0..100%)
+  // Confidence — gated
+  const confWrap = $("confBlock");
+  if (tier.confidence) {
+    confWrap.classList.remove("locked-stat");
+    $("confVal").textContent = r.confidence + "%";
+  } else {
+    confWrap.classList.add("locked-stat");
+    $("confVal").textContent = "🔒";
+  }
+
   const pct = (finalScore + 100) / 2;
   $("gaugeFill").style.width = pct + "%";
   $("gaugeFill").style.background = gaugeColor(finalScore);
 
-  // Trade plan
-  const plan = r.plan;
-  const planEl = $("plan");
-  if (plan && plan.side !== "FLAT") {
-    planEl.innerHTML = `
-      <div class="plan-grid">
-        <div><span class="k">Side</span><span class="v ${plan.side === "LONG" ? "buy" : "sell"}">${plan.side}</span></div>
-        <div><span class="k">Entry</span><span class="v">$${fmt(plan.entry)}</span></div>
-        <div><span class="k">Stop-loss</span><span class="v sell">$${fmt(plan.stop)}</span></div>
-        <div><span class="k">Target</span><span class="v buy">$${fmt(plan.target)}</span></div>
-        <div><span class="k">Risk / trade</span><span class="v">${plan.riskPct.toFixed(2)}% (to stop)</span></div>
-        <div><span class="k">Reward:Risk</span><span class="v">${plan.riskReward}:1</span></div>
-      </div>
-      <p class="plan-note">${plan.note}</p>`;
+  // Plain-English summary — Pro
+  const peCard = $("plainEnglishCard");
+  if (tier.plainEnglish && r.plainEnglish) {
+    peCard.classList.remove("hidden");
+    $("plainEnglish").textContent = r.plainEnglish;
   } else {
-    planEl.innerHTML = `<p class="plan-note">${plan ? plan.note : "No trade plan available."}</p>`;
+    peCard.classList.add("hidden");
   }
 
-  // Snapshot chips
-  const s = r.snapshot;
-  $("snapshot").innerHTML = [
-    chip("RSI(14)", s.rsi?.toFixed(1), rsiTone(s.rsi)),
-    chip("Stoch %K", s.stochK?.toFixed(0)),
-    chip("MACD hist", s.macdHist?.toFixed(4), s.macdHist > 0 ? "buy" : "sell"),
-    chip("ATR(14)", fmt(s.atr)),
-    chip("SMA50", fmt(s.sma50)),
-    chip("SMA200", fmt(s.sma200)),
-    chip("ADX", r.adx.adx?.toFixed(0), r.adx.adx > 25 ? "buy" : ""),
-  ].join("");
+  // Trade plan — gated
+  const planCard = $("planCard");
+  const planEl = $("plan");
+  if (tier.tradePlan) {
+    planCard.classList.remove("locked-card");
+    const plan = r.plan;
+    if (plan && plan.side !== "FLAT") {
+      planEl.innerHTML = `
+        <div class="plan-grid">
+          <div><span class="k">Side</span><span class="v ${plan.side === "LONG" ? "buy" : "sell"}">${plan.side}</span></div>
+          <div><span class="k">Entry</span><span class="v">$${fmt(plan.entry)}</span></div>
+          <div><span class="k">Stop-loss</span><span class="v sell">$${fmt(plan.stop)}</span></div>
+          <div><span class="k">Target</span><span class="v buy">$${fmt(plan.target)}</span></div>
+          <div><span class="k">Risk / trade</span><span class="v">${plan.riskPct.toFixed(2)}%</span></div>
+          <div><span class="k">Reward:Risk</span><span class="v">${plan.riskReward}:1</span></div>
+        </div>
+        <p class="plan-note">${plan.note}</p>`;
+    } else {
+      planEl.innerHTML = `<p class="plan-note">${plan ? plan.note : "No trade plan available."}</p>`;
+    }
+  } else {
+    planEl.innerHTML = upsell("Trade plans (entry, stop-loss & target) are a Lite feature.");
+  }
 
-  // Indicator breakdown table
-  $("breakdown").innerHTML = r.breakdown
+  // Snapshot chips — only for allowed indicators
+  const s = r.snapshot;
+  const allow = (k) => tier.voters === "all" || tier.voters.includes(k);
+  const chips = [];
+  if (allow("rsi")) chips.push(chip("RSI(14)", s.rsi?.toFixed(1), rsiTone(s.rsi)));
+  if (allow("macd")) chips.push(chip("MACD hist", s.macdHist?.toFixed(4), s.macdHist > 0 ? "buy" : "sell"));
+  if (allow("stoch")) chips.push(chip("Stoch %K", s.stochK?.toFixed(0)));
+  chips.push(chip("SMA50", fmt(s.sma50)));
+  chips.push(chip("SMA200", fmt(s.sma200)));
+  if (tier.tradePlan) chips.push(chip("ATR(14)", fmt(s.atr)));
+  if (tier.voters === "all") chips.push(chip("ADX", r.adx.adx?.toFixed(0), r.adx.adx > 25 ? "buy" : ""));
+  $("snapshot").innerHTML = chips.join("");
+
+  // Breakdown — allowed voters + an upsell row for the locked ones
+  const shown = r.breakdown
     .map((b) => {
       const dir = b.vote > 0.15 ? "buy" : b.vote < -0.15 ? "sell" : "neutral";
       const label = b.vote > 0.15 ? "Bullish" : b.vote < -0.15 ? "Bearish" : "Neutral";
       const barW = Math.abs(b.vote) * 50;
-      const barSide = b.vote >= 0 ? "left:50%" : `right:50%`;
+      const barSide = b.vote >= 0 ? "left:50%" : "right:50%";
       return `
         <div class="row">
           <div class="row-head">
@@ -1230,52 +1782,64 @@ function render(r, source) {
         </div>`;
     })
     .join("");
+  const lockedCount = VOTER_KEYS.length - r.breakdown.length;
+  const lockRow =
+    lockedCount > 0
+      ? `<div class="row lock-row" onclick="window.__openPricing()">🔒 <b>${lockedCount} more indicator${
+          lockedCount > 1 ? "s" : ""
+        }</b> (Stochastic, Bollinger, volume flow…) unlock on higher plans — click to upgrade.</div>`
+      : "";
+  $("breakdown").innerHTML = shown + lockRow;
+  $("adxNote").textContent = tier.voters === "all" ? r.adx.note || "" : "";
+  $("blendNote").textContent =
+    r.blendedScore != null
+      ? `Final score blends technicals (70%) + fundamentals (30%) → ${r.blendedScore >= 0 ? "+" : ""}${r.blendedScore}.`
+      : "";
 
-  // ADX regime note
-  $("adxNote").textContent = r.adx.note || "";
-
-  // Fundamentals
+  // Fundamentals — Pro + crypto
   const fundWrap = $("fundamentals");
-  if (r.fundScore && state.fundamentals) {
-    const f = state.fundamentals;
+  if (tier.fundamentals) {
     fundWrap.classList.remove("hidden");
-    $("fundScore").textContent = (r.fundScore.score >= 0 ? "+" : "") + r.fundScore.score;
-    $("fundScore").className = "mini-score " + (r.fundScore.score >= 0 ? "buy" : "sell");
-    $("fundMetrics").innerHTML = [
-      chip("Market cap", fmt(f.marketCap, { compact: true })),
-      chip("Rank", f.marketCapRank ? "#" + f.marketCapRank : "—"),
-      chip("24h vol", fmt(f.volume24h, { compact: true })),
-      chip("24h", fmt(f.change24h, { pct: true }), f.change24h > 0 ? "buy" : "sell"),
-      chip("7d", fmt(f.change7d, { pct: true }), f.change7d > 0 ? "buy" : "sell"),
-      chip("30d", fmt(f.change30d, { pct: true }), f.change30d > 0 ? "buy" : "sell"),
-      chip("From ATH", fmt(f.athChangePct, { pct: true })),
-    ].join("");
-    $("fundReasons").innerHTML = r.fundScore.reasons.map((x) => `<li>${x}</li>`).join("");
-    $("blendNote").textContent =
-      r.blendedScore != null
-        ? `Final score blends technicals (70%) + fundamentals (30%) → ${r.blendedScore >= 0 ? "+" : ""}${r.blendedScore}.`
-        : "";
+    if (r.fundScore && state.fundamentals) {
+      const f = state.fundamentals;
+      $("fundScore").textContent = (r.fundScore.score >= 0 ? "+" : "") + r.fundScore.score;
+      $("fundScore").className = "mini-score " + (r.fundScore.score >= 0 ? "buy" : "sell");
+      $("fundMetrics").innerHTML = [
+        chip("Market cap", fmt(f.marketCap, { compact: true })),
+        chip("Rank", f.marketCapRank ? "#" + f.marketCapRank : "—"),
+        chip("24h vol", fmt(f.volume24h, { compact: true })),
+        chip("24h", fmt(f.change24h, { pct: true }), f.change24h > 0 ? "buy" : "sell"),
+        chip("7d", fmt(f.change7d, { pct: true }), f.change7d > 0 ? "buy" : "sell"),
+        chip("30d", fmt(f.change30d, { pct: true }), f.change30d > 0 ? "buy" : "sell"),
+        chip("From ATH", fmt(f.athChangePct, { pct: true })),
+      ].join("");
+      $("fundReasons").innerHTML = r.fundScore.reasons.map((x) => `<li>${x}</li>`).join("");
+    } else {
+      $("fundScore").textContent = "";
+      $("fundScore").className = "mini-score";
+      $("fundMetrics").innerHTML = "";
+      $("fundReasons").innerHTML = `<li>Fundamentals are available for major crypto assets. Pick one (e.g. Bitcoin) to see market-cap, liquidity, ATH distance and momentum scoring.</li>`;
+    }
   } else {
     fundWrap.classList.add("hidden");
-    $("blendNote").textContent = "";
   }
 
   drawChart(state.candles, r.indicators);
 }
 
-function chip(label, value, tone = "") {
-  return `<div class="metric ${tone}"><span class="ml">${label}</span><span class="mv">${
-    value ?? "—"
-  }</span></div>`;
+function upsell(msg) {
+  return `<div class="upsell" onclick="window.__openPricing()">🔒 ${msg}<br><span class="upsell-cta">Upgrade →</span></div>`;
 }
 
+function chip(label, value, tone = "") {
+  return `<div class="metric ${tone}"><span class="ml">${label}</span><span class="mv">${value ?? "—"}</span></div>`;
+}
 function rsiTone(v) {
   if (v == null) return "";
   if (v <= 30) return "buy";
   if (v >= 70) return "sell";
   return "";
 }
-
 function prettyName(k) {
   return {
     trend: "Trend structure (MA)",
@@ -1287,7 +1851,6 @@ function prettyName(k) {
     obv: "On-Balance Volume",
   }[k] || k;
 }
-
 function verdictClass(a) {
   if (a.includes("STRONG BUY")) return "strong-buy";
   if (a.includes("BUY")) return "buy";
@@ -1295,7 +1858,6 @@ function verdictClass(a) {
   if (a.includes("SELL")) return "sell";
   return "hold";
 }
-
 function gaugeColor(score) {
   if (score >= 45) return "#16c784";
   if (score >= 18) return "#4cd3a5";
@@ -1304,7 +1866,7 @@ function gaugeColor(score) {
   return "#e23744";
 }
 
-// ---- Canvas candlestick chart with SMA overlays + RSI subpanel ----
+// ---------------- Chart (unchanged core) ----------------
 function drawChart(candles, ind) {
   const canvas = $("chart");
   const dpr = window.devicePixelRatio || 1;
@@ -1334,7 +1896,6 @@ function drawChart(candles, ind) {
   const x = (i) => padL + (i / (view.length - 1)) * (cssW - padL - padR);
   const y = (p) => 8 + (1 - (p - min) / (max - min)) * (priceH - 16);
 
-  // grid + price axis
   ctx.font = "10px ui-monospace, monospace";
   ctx.textBaseline = "middle";
   for (let g = 0; g <= 4; g++) {
@@ -1350,7 +1911,7 @@ function drawChart(candles, ind) {
     ctx.fillText(fmt(p), cssW - padR + 4, yy);
   }
 
-  const cw = Math.max(1.5, (cssW - padL - padR) / view.length * 0.62);
+  const cw = Math.max(1.5, ((cssW - padL - padR) / view.length) * 0.62);
   for (let i = 0; i < view.length; i++) {
     const c = view[i];
     const up = c.close >= c.open;
@@ -1366,7 +1927,6 @@ function drawChart(candles, ind) {
     ctx.fillRect(xi - cw / 2, Math.min(yo, yc), cw, Math.max(1, Math.abs(yc - yo)));
   }
 
-  // MA overlays
   const overlay = (arr, color) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.3;
@@ -1377,35 +1937,32 @@ function drawChart(candles, ind) {
       if (v == null) continue;
       const px = x(i);
       const py = y(v);
-      if (!started) { ctx.moveTo(px, py); started = true; }
-      else ctx.lineTo(px, py);
+      if (!started) {
+        ctx.moveTo(px, py);
+        started = true;
+      } else ctx.lineTo(px, py);
     }
     ctx.stroke();
   };
   overlay(ind.sma20, "#4c9aff");
   overlay(ind.sma50, "#f5a623");
   overlay(ind.sma200, "#b06cff");
-  // Bollinger bands (faint)
   overlay(ind.bollinger.upper, "rgba(255,255,255,0.25)");
   overlay(ind.bollinger.lower, "rgba(255,255,255,0.25)");
 
-  // legend
   ctx.textAlign = "left";
-  const legend = [
+  [
     ["SMA20", "#4c9aff"],
     ["SMA50", "#f5a623"],
     ["SMA200", "#b06cff"],
-  ];
-  let lx = padL;
-  legend.forEach(([t, col]) => {
+  ].forEach(([t, col], idx) => {
+    const lx = padL + idx * 62;
     ctx.fillStyle = col;
     ctx.fillRect(lx, 10, 10, 3);
     ctx.fillStyle = "rgba(255,255,255,0.6)";
     ctx.fillText(t, lx + 14, 12);
-    lx += 62;
   });
 
-  // RSI subpanel
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.fillText("RSI(14)", padL, rsiTop - 8);
   const ry = (v) => rsiTop + (1 - v / 100) * rsiH;
@@ -1427,24 +1984,166 @@ function drawChart(candles, ind) {
     if (v == null) continue;
     const px = x(i);
     const py = ry(v);
-    if (!started) { ctx.moveTo(px, py); started = true; }
-    else ctx.lineTo(px, py);
+    if (!started) {
+      ctx.moveTo(px, py);
+      started = true;
+    } else ctx.lineTo(px, py);
   }
   ctx.stroke();
 }
 
-// wire up
-window.addEventListener("DOMContentLoaded", () => {
+// ---------------- Controls / tier UI ----------------
+function buildPresetOptions() {
   const sel = $("preset");
-  PRESETS.forEach((p) => {
+  sel.innerHTML = '<option value="">— quick pick an asset —</option>';
+  for (const g of PRESET_GROUPS) {
+    const og = document.createElement("optgroup");
+    og.label = g.group;
+    for (const it of g.items) {
+      const o = document.createElement("option");
+      o.value = it.symbol;
+      o.textContent = `${it.label} (${it.symbol})`;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+}
+
+function buildIntervalOptions(tier) {
+  const sel = $("interval");
+  const prev = sel.value;
+  sel.innerHTML = "";
+  for (const tf of tier.timeframes) {
     const o = document.createElement("option");
-    o.value = p.symbol;
-    o.textContent = `${p.label} (${p.symbol})`;
+    o.value = tf;
+    o.textContent = TF_LABELS[tf] || tf;
     sel.appendChild(o);
-  });
-  sel.addEventListener("change", () => {
-    $("symbol").value = sel.value;
-    run();
+  }
+  if (tier.timeframes.includes(prev)) sel.value = prev;
+  else sel.value = tier.timeframes.includes("1d") ? "1d" : tier.timeframes[tier.timeframes.length - 1];
+}
+
+function renderUserBar() {
+  const u = auth.getUser();
+  const tier = currentTier();
+  $("userEmail").textContent = u ? u.email : "";
+  const badge = $("tierBadge");
+  badge.textContent = tier.name.toUpperCase() + (u && u.owner ? " · OWNER" : "");
+  badge.className = "tier-badge t-" + tier.id;
+
+  // Owner "view as" selector
+  const ownerBox = $("ownerViewAs");
+  if (u && u.owner) {
+    ownerBox.classList.remove("hidden");
+    const sel = $("viewAsSel");
+    if (sel.options.length === 0) {
+      TIER_ORDER.forEach((id) => {
+        const o = document.createElement("option");
+        o.value = id;
+        o.textContent = "View as " + TIERS[id].name;
+        sel.appendChild(o);
+      });
+    }
+    sel.value = auth.effectiveTierId();
+  } else {
+    ownerBox.classList.add("hidden");
+  }
+}
+
+function applyTier() {
+  const tier = currentTier();
+  buildIntervalOptions(tier);
+  renderUserBar();
+}
+
+// ---------------- Pricing modal ----------------
+function openPricing() {
+  const grid = $("pricingGrid");
+  const activeId = auth.effectiveTierId();
+  const u = auth.getUser();
+  grid.innerHTML = TIER_ORDER.map((id) => {
+    const t = TIERS[id];
+    const isActive = id === activeId;
+    const perks = t.perks.map((p) => `<li class="yes">${p}</li>`).join("");
+    const locked = t.locked.map((p) => `<li class="no">${p}</li>`).join("");
+    const btn = isActive
+      ? `<button class="tier-btn current" disabled>Current plan</button>`
+      : `<button class="tier-btn" onclick="window.__choosePlan('${id}')">${
+          u && u.owner ? "Preview " + t.name : "Choose " + t.name
+        }</button>`;
+    return `
+      <div class="tier-card ${isActive ? "active" : ""} t-${id}">
+        <div class="tier-name">${t.name}</div>
+        <div class="tier-price">${t.price}<span>${t.priceNote}</span></div>
+        <div class="tier-tagline">${t.tagline}</div>
+        <ul class="tier-perks">${perks}${locked}</ul>
+        ${btn}
+      </div>`;
+  }).join("");
+  $("pricingModal").classList.remove("hidden");
+}
+function closePricing() {
+  $("pricingModal").classList.add("hidden");
+}
+function choosePlan(id) {
+  const u = auth.getUser();
+  if (u && u.owner) {
+    auth.setViewAs(id); // owners preview, real tier stays Pro
+  } else {
+    auth.setTier(id); // demo "subscribe"
+  }
+  closePricing();
+  applyTier();
+  if (state.result) run();
+}
+
+// ---------------- Auth flow ----------------
+function showAuth() {
+  $("authOverlay").classList.remove("hidden");
+  $("appRoot").classList.add("hidden");
+}
+function hideAuth() {
+  $("authOverlay").classList.add("hidden");
+  $("appRoot").classList.remove("hidden");
+}
+function setAuthMode(mode) {
+  $("authTitle").textContent = mode === "signup" ? "Create your account" : "Welcome back";
+  $("authSubmit").textContent = mode === "signup" ? "Sign up — free" : "Log in";
+  $("authToggle").innerHTML =
+    mode === "signup"
+      ? `Already have an account? <a href="#" id="toLogin">Log in</a>`
+      : `New here? <a href="#" id="toSignup">Create a free account</a>`;
+  $("authForm").dataset.mode = mode;
+  $("authError").textContent = "";
+  const t = document.getElementById("toLogin");
+  const s = document.getElementById("toSignup");
+  if (t) t.onclick = (e) => { e.preventDefault(); setAuthMode("login"); };
+  if (s) s.onclick = (e) => { e.preventDefault(); setAuthMode("signup"); };
+}
+function submitAuth(e) {
+  e.preventDefault();
+  const mode = $("authForm").dataset.mode;
+  const email = $("authEmail").value;
+  const pass = $("authPass").value;
+  const res = mode === "signup" ? auth.signup(email, pass) : auth.login(email, pass);
+  if (res.error) {
+    $("authError").textContent = res.error;
+    return;
+  }
+  hideAuth();
+  applyTier();
+  run();
+}
+
+// ---------------- Boot ----------------
+window.addEventListener("DOMContentLoaded", () => {
+  buildPresetOptions();
+
+  $("preset").addEventListener("change", (e) => {
+    if (e.target.value) {
+      $("symbol").value = e.target.value;
+      run();
+    }
   });
   $("analyzeBtn").addEventListener("click", run);
   $("symbol").addEventListener("keydown", (e) => {
@@ -1453,9 +2152,45 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("resize", () => {
     if (state.result) drawChart(state.candles, state.result.indicators);
   });
-  // initial
-  run();
+
+  // header buttons
+  $("upgradeBtn").addEventListener("click", openPricing);
+  $("logoutBtn").addEventListener("click", () => {
+    auth.logout();
+    location.reload();
+  });
+  $("viewAsSel").addEventListener("change", (e) => {
+    auth.setViewAs(e.target.value);
+    applyTier();
+    if (state.result) run();
+  });
+  $("closePricing").addEventListener("click", closePricing);
+  $("pricingModal").addEventListener("click", (e) => {
+    if (e.target.id === "pricingModal") closePricing();
+  });
+
+  // auth form
+  $("authForm").addEventListener("submit", submitAuth);
+  setAuthMode("signup");
+
+  // expose a couple handlers for inline onclicks
+  window.__openPricing = openPricing;
+  window.__choosePlan = choosePlan;
+
+  // gate: logged in?
+  if (auth.getUser()) {
+    hideAuth();
+    applyTier();
+    run();
+  } else {
+    showAuth();
+  }
 });
+
+
+// --- module glue for single-file build (defined after all sources to avoid TDZ) ---
+var ta = { sma, ema, rsi, macd, bollinger, stochastic, atr, obv, adx, last, prev };
+var auth = { signup, login, logout, getUser, setTier, setViewAs, getViewAs, effectiveTierId, isOwnerEmail, OWNER_EMAILS };
 
 </script>
 </body>

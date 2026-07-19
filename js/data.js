@@ -11,6 +11,18 @@
 const BINANCE = "https://api.binance.com/api/v3";
 const COINGECKO = "https://api.coingecko.com/api/v3";
 
+// fetch with a hard timeout so a dead/blocked source fails fast instead of
+// hanging the whole fallback chain.
+async function tfetch(url, ms = 6000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 // Map friendly interval -> Binance kline interval
 export const INTERVALS = {
   "15m": "15m",
@@ -23,12 +35,24 @@ export const INTERVALS = {
 // Tries several public exchanges in order so a regional block on one (e.g.
 // Binance is unavailable in some countries) doesn't kill live data. Returns the
 // first source that answers; throws only if every source fails.
+export function looksLikeCrypto(symbol) {
+  return /(USDT|USDC|BUSD)$/i.test(symbol);
+}
+
 export async function fetchCandles(symbol, interval = "1d", limit = 400) {
-  const sources = [
-    { name: "Binance", fn: fromBinance },
-    { name: "Coinbase", fn: fromCoinbase },
-    { name: "Kraken", fn: fromKraken },
-  ];
+  // Crypto pairs go to native exchanges first (fast, no proxy needed); every
+  // asset type also falls back to Yahoo, which covers stocks, ETFs, forex,
+  // indices, commodities AND crypto.
+  const sources = [];
+  if (looksLikeCrypto(symbol)) {
+    sources.push(
+      { name: "Binance", fn: fromBinance },
+      { name: "Coinbase", fn: fromCoinbase },
+      { name: "Kraken", fn: fromKraken }
+    );
+  }
+  sources.push({ name: "Yahoo", fn: fromYahoo });
+
   const errors = [];
   for (const s of sources) {
     try {
@@ -48,7 +72,7 @@ async function fromBinance(symbol, interval, limit) {
   const url = `${BINANCE}/klines?symbol=${encodeURIComponent(
     symbol
   )}&interval=${INTERVALS[interval] || "1d"}&limit=${limit}`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
   const raw = await res.json();
   if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
@@ -68,7 +92,7 @@ async function fromCoinbase(symbol, interval, limit) {
   const product = toDashPair(symbol);
   const gran = CB_GRAN[interval] || 86400;
   const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=${gran}`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
   const raw = await res.json(); // [ time, low, high, open, close, volume ], newest first
   if (!Array.isArray(raw) || raw.length === 0) throw new Error("empty");
@@ -91,7 +115,7 @@ async function fromKraken(symbol, interval, limit) {
   const pair = toKrakenPair(symbol);
   const mins = KR_MIN[interval] || 1440;
   const url = `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${mins}`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
   const data = await res.json();
   if (data.error && data.error.length) throw new Error(data.error.join(","));
@@ -122,13 +146,102 @@ function toKrakenPair(symbol) {
   return `${base}USD`;
 }
 
+// --- Yahoo Finance: the universal source (stocks, ETFs, forex, indices,
+// commodities, crypto). Yahoo doesn't send CORS headers, so we route through
+// public CORS proxies and try them in order for resilience. ---
+const YF_PROXIES = [
+  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+  (u) => u, // last resort: hit Yahoo directly (works if CORS ever allows it)
+];
+const YF_MAP = {
+  "15m": { i: "15m", r: "1mo", agg: 1 },
+  "1h": { i: "60m", r: "3mo", agg: 1 },
+  "4h": { i: "60m", r: "1y", agg: 4 }, // Yahoo has no 4h; aggregate 4×1h
+  "1d": { i: "1d", r: "2y", agg: 1 },
+  "1w": { i: "1wk", r: "5y", agg: 1 },
+};
+
+// BTCUSDT -> BTC-USD for Yahoo; other symbols (AAPL, EURUSD=X, GC=F, ^GSPC) pass through.
+function toYahooSymbol(sym) {
+  if (looksLikeCrypto(sym)) return sym.replace(/(USDT|USDC|BUSD)$/i, "-USD");
+  return sym;
+}
+
+async function fromYahoo(symbol, interval, limit) {
+  const m = YF_MAP[interval] || YF_MAP["1d"];
+  const ysym = toYahooSymbol(symbol);
+  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
+  let lastErr = "";
+  for (const host of hosts) {
+    const target = `https://${host}/v8/finance/chart/${encodeURIComponent(
+      ysym
+    )}?range=${m.r}&interval=${m.i}`;
+    for (const wrap of YF_PROXIES) {
+      try {
+        const res = await tfetch(wrap(target), 5000);
+        if (!res.ok) {
+          lastErr = `${res.status}`;
+          continue;
+        }
+        const json = await res.json();
+        const parsed = parseYahoo(json, m.agg, limit);
+        if (parsed && parsed.length) return parsed;
+        lastErr = "no rows";
+      } catch (e) {
+        lastErr = e.message;
+      }
+    }
+  }
+  throw new Error(lastErr || "unreachable");
+}
+
+function parseYahoo(json, agg, limit) {
+  const r = json && json.chart && json.chart.result && json.chart.result[0];
+  if (!r || !r.timestamp) {
+    const desc = json && json.chart && json.chart.error && json.chart.error.description;
+    throw new Error(desc || "invalid symbol");
+  }
+  const q = r.indicators.quote[0];
+  let candles = r.timestamp
+    .map((t, i) => ({
+      time: t * 1000,
+      open: q.open[i],
+      high: q.high[i],
+      low: q.low[i],
+      close: q.close[i],
+      volume: q.volume[i] || 0,
+    }))
+    .filter((c) => c.open != null && c.close != null && c.high != null && c.low != null);
+  if (agg > 1) candles = aggregateCandles(candles, agg);
+  return candles.slice(-limit);
+}
+
+function aggregateCandles(c, n) {
+  const out = [];
+  for (let i = 0; i < c.length; i += n) {
+    const g = c.slice(i, i + n);
+    if (!g.length) continue;
+    out.push({
+      time: g[0].time,
+      open: g[0].open,
+      high: Math.max(...g.map((x) => x.high)),
+      low: Math.min(...g.map((x) => x.low)),
+      close: g[g.length - 1].close,
+      volume: g.reduce((s, x) => s + x.volume, 0),
+    });
+  }
+  return out;
+}
+
 // Fundamentals for crypto via CoinGecko. `coingeckoId` e.g. "bitcoin".
 export async function fetchFundamentals(coingeckoId) {
   if (!coingeckoId) return null;
   const url = `${COINGECKO}/coins/${encodeURIComponent(
     coingeckoId
   )}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`;
-  const res = await fetch(url);
+  const res = await tfetch(url);
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
   const d = await res.json();
   const m = d.market_data || {};
