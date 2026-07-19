@@ -7,6 +7,18 @@ weighted score — always showing *why*, never a black box.
 
 > ⚠️ **Not financial advice. Read the honesty note at the bottom before using this.**
 
+## Highlights
+
+- **Any asset** — stocks, ETFs, forex, indices, commodities and crypto, via a
+  multi-source data layer (Binance/Coinbase/Kraken for crypto, Yahoo Finance for
+  everything) with automatic fallback.
+- **Free / Lite / Pro tiers** — a working sign-up + subscription front-end. Higher
+  tiers unlock more indicators, more timeframes, confidence, the trade plan,
+  fundamentals, and a plain-English summary. Owner account unlocks everything and
+  can "view as" any tier. (Real payment enforcement needs a backend — see below.)
+- **Live news ticker** — scrolling market headlines (CryptoCompare + Yahoo RSS)
+  tagged to the listed assets.
+
 ## What it does
 
 - **Live market data** — pulls OHLCV candles from Binance's public API (no key needed).

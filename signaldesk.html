@@ -280,6 +280,24 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 .demo-banner { background: rgba(209,183,58,.12); border: 1px solid rgba(209,183,58,.4); color: #e8d67a;
   border-radius: 10px; padding: 11px 14px; font-size: 13px; margin: 0 0 14px; line-height: 1.5; }
 
+/* ===== News ticker ===== */
+.news-ticker { display: flex; align-items: center; gap: 0; background: #0f141c; border-bottom: 1px solid var(--border);
+  overflow: hidden; height: 40px; }
+.news-label { flex-shrink: 0; background: var(--sell); color: #fff; font-size: 11px; font-weight: 800;
+  letter-spacing: 0.08em; padding: 0 12px; height: 100%; display: flex; align-items: center; }
+.news-track-wrap { flex: 1; overflow: hidden; position: relative; }
+.news-track { display: inline-flex; align-items: center; white-space: nowrap; will-change: transform;
+  animation: ticker-scroll linear infinite; }
+.news-track:hover { animation-play-state: paused; }
+.news-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 22px; font-size: 13px;
+  color: var(--text); text-decoration: none; border-right: 1px solid var(--border); height: 40px; }
+.news-item:hover { color: var(--accent); }
+.news-item .nt { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 5px;
+  background: rgba(76,154,255,0.16); color: #8bb8ff; }
+.news-item .nt.up { background: rgba(22,199,132,0.16); color: #4cd3a5; }
+.news-item .nt.macro { background: rgba(245,166,35,0.16); color: #f5c065; }
+@keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
 </style>
 </head>
 <body>
@@ -316,6 +334,13 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
         <button id="logoutBtn" class="btn-ghost">Log out</button>
       </div>
     </header>
+
+    <div id="newsTicker" class="news-ticker hidden">
+      <span class="news-label">📰 LIVE</span>
+      <div class="news-track-wrap">
+        <div id="newsTrack" class="news-track"></div>
+      </div>
+    </div>
 
     <div class="wrap">
       <div id="demoBanner" class="demo-banner hidden">
@@ -1209,6 +1234,103 @@ async function safeText(res) {
 }
 
 
+// news.js — fetches recent market headlines for the scrolling ticker.
+// Crypto: CryptoCompare public news API (CORS-enabled, no key).
+// Stocks: Yahoo Finance RSS headline feed via CORS proxies.
+// All best-effort: any source that fails is skipped; if all fail the ticker hides.
+
+const NEWS_PROXIES = [
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+];
+
+async function nfetch(url, ms = 6000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// Which listed crypto a headline is about, from CryptoCompare's categories field.
+const CRYPTO_TAGS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "ADA", "AVAX"];
+function cryptoTag(categories) {
+  const c = (categories || "").toUpperCase();
+  for (const t of CRYPTO_TAGS) if (c.includes(t)) return t;
+  return "CRYPTO";
+}
+
+// Which listed stock a headline is about, by scanning the title.
+const STOCK_NAMES = [
+  ["Apple", "AAPL"], ["Tesla", "TSLA"], ["Nvidia", "NVDA"], ["Microsoft", "MSFT"],
+  ["Amazon", "AMZN"], ["S&P 500", "SPY"], ["Nasdaq", "QQQ"], ["Gold", "GC=F"],
+  ["Oil", "CL=F"], ["Fed", "MACRO"], ["inflation", "MACRO"],
+];
+function stockTag(title) {
+  const t = (title || "").toLowerCase();
+  for (const [name, tag] of STOCK_NAMES) if (t.includes(name.toLowerCase())) return tag;
+  return "MARKETS";
+}
+
+async function cryptoNews() {
+  const res = await nfetch("https://min-api.cryptocompare.com/data/v2/news/?lang=EN", 6000);
+  if (!res.ok) throw new Error("crypto news " + res.status);
+  const j = await res.json();
+  return (j.Data || []).slice(0, 14).map((n) => ({
+    tag: cryptoTag(n.categories),
+    title: n.title,
+    url: n.url,
+    source: (n.source_info && n.source_info.name) || n.source || "news",
+    ts: n.published_on ? n.published_on * 1000 : Date.now(),
+  }));
+}
+
+async function stockNews() {
+  const feed =
+    "https://feeds.finance.yahoo.com/rss/2.0/headline?s=AAPL,TSLA,NVDA,MSFT,AMZN,SPY,QQQ&region=US&lang=en-US";
+  let xml = "";
+  for (const wrap of NEWS_PROXIES) {
+    try {
+      const res = await nfetch(wrap(feed), 6000);
+      if (!res.ok) continue;
+      xml = await res.text();
+      if (xml && xml.includes("<item")) break;
+    } catch {
+      /* try next proxy */
+    }
+  }
+  if (!xml || !xml.includes("<item")) return [];
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  return [...doc.querySelectorAll("item")].slice(0, 12).map((it) => {
+    const title = (it.querySelector("title") || {}).textContent || "";
+    const link = (it.querySelector("link") || {}).textContent || "#";
+    const dateTxt = (it.querySelector("pubDate") || {}).textContent || "";
+    return { tag: stockTag(title), title, url: link, source: "Yahoo Finance", ts: Date.parse(dateTxt) || Date.now() };
+  });
+}
+
+async function fetchNews() {
+  const settled = await Promise.allSettled([cryptoNews(), stockNews()]);
+  const items = [];
+  for (const r of settled) if (r.status === "fulfilled") items.push(...r.value);
+  // newest first, dedupe by title prefix
+  items.sort((a, b) => b.ts - a.ts);
+  const seen = new Set();
+  const out = [];
+  for (const it of items) {
+    if (!it.title) continue;
+    const k = it.title.slice(0, 60).toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(it);
+  }
+  return out.slice(0, 24);
+}
+
+
 // signals.js
 // Turns raw indicators into a transparent, weighted BUY / SELL / HOLD decision.
 //
@@ -1567,6 +1689,7 @@ function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
 
 
 
+
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
   {
@@ -1825,6 +1948,51 @@ function render(r, symbol, tier) {
   }
 
   drawChart(state.candles, r.indicators);
+}
+
+// ---------------- News ticker ----------------
+let newsTimer = null;
+async function initNews() {
+  await loadNews();
+  if (newsTimer) clearInterval(newsTimer);
+  newsTimer = setInterval(loadNews, 5 * 60 * 1000); // refresh every 5 min
+}
+async function loadNews() {
+  let items = [];
+  try {
+    items = await fetchNews();
+  } catch (e) {
+    console.warn("news failed:", e);
+  }
+  const ticker = $("newsTicker");
+  const track = $("newsTrack");
+  if (!items.length) {
+    ticker.classList.add("hidden");
+    return;
+  }
+  track.innerHTML = "";
+  // build twice for a seamless -50% loop; titles via textContent (untrusted source)
+  const build = () => {
+    for (const it of items) {
+      const a = document.createElement("a");
+      a.className = "news-item";
+      a.href = it.url || "#";
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      const tag = document.createElement("span");
+      tag.className = "nt" + (it.tag === "MACRO" ? " macro" : /^(BTC|ETH|SOL|XRP|DOGE|BNB|ADA|AVAX)$/.test(it.tag) ? " up" : "");
+      tag.textContent = it.tag;
+      const t = document.createElement("span");
+      t.textContent = it.title;
+      a.append(tag, t);
+      track.appendChild(a);
+    }
+  };
+  build();
+  build();
+  const seconds = Math.max(30, items.length * 5);
+  track.style.animationDuration = seconds + "s";
+  ticker.classList.remove("hidden");
 }
 
 function upsell(msg) {
@@ -2133,6 +2301,7 @@ function submitAuth(e) {
   hideAuth();
   applyTier();
   run();
+  initNews();
 }
 
 // ---------------- Boot ----------------
@@ -2182,13 +2351,14 @@ window.addEventListener("DOMContentLoaded", () => {
     hideAuth();
     applyTier();
     run();
+    initNews();
   } else {
     showAuth();
   }
 });
 
 
-// --- module glue for single-file build (defined after all sources to avoid TDZ) ---
+// --- module glue for single-file build (after sources to avoid TDZ) ---
 var ta = { sma, ema, rsi, macd, bollinger, stochastic, atr, obv, adx, last, prev };
 var auth = { signup, login, logout, getUser, setTier, setViewAs, getViewAs, effectiveTierId, isOwnerEmail, OWNER_EMAILS };
 

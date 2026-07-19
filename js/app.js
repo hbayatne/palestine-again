@@ -9,6 +9,7 @@ import {
 } from "./data.js";
 import { TIERS, TIER_ORDER } from "./tiers.js";
 import * as auth from "./auth.js";
+import { fetchNews } from "./news.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -268,6 +269,51 @@ function render(r, symbol, tier) {
   }
 
   drawChart(state.candles, r.indicators);
+}
+
+// ---------------- News ticker ----------------
+let newsTimer = null;
+async function initNews() {
+  await loadNews();
+  if (newsTimer) clearInterval(newsTimer);
+  newsTimer = setInterval(loadNews, 5 * 60 * 1000); // refresh every 5 min
+}
+async function loadNews() {
+  let items = [];
+  try {
+    items = await fetchNews();
+  } catch (e) {
+    console.warn("news failed:", e);
+  }
+  const ticker = $("newsTicker");
+  const track = $("newsTrack");
+  if (!items.length) {
+    ticker.classList.add("hidden");
+    return;
+  }
+  track.innerHTML = "";
+  // build twice for a seamless -50% loop; titles via textContent (untrusted source)
+  const build = () => {
+    for (const it of items) {
+      const a = document.createElement("a");
+      a.className = "news-item";
+      a.href = it.url || "#";
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      const tag = document.createElement("span");
+      tag.className = "nt" + (it.tag === "MACRO" ? " macro" : /^(BTC|ETH|SOL|XRP|DOGE|BNB|ADA|AVAX)$/.test(it.tag) ? " up" : "");
+      tag.textContent = it.tag;
+      const t = document.createElement("span");
+      t.textContent = it.title;
+      a.append(tag, t);
+      track.appendChild(a);
+    }
+  };
+  build();
+  build();
+  const seconds = Math.max(30, items.length * 5);
+  track.style.animationDuration = seconds + "s";
+  ticker.classList.remove("hidden");
 }
 
 function upsell(msg) {
@@ -576,6 +622,7 @@ function submitAuth(e) {
   hideAuth();
   applyTier();
   run();
+  initNews();
 }
 
 // ---------------- Boot ----------------
@@ -625,6 +672,7 @@ window.addEventListener("DOMContentLoaded", () => {
     hideAuth();
     applyTier();
     run();
+    initNews();
   } else {
     showAuth();
   }
