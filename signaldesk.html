@@ -298,6 +298,68 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 .news-item .nt.macro { background: rgba(245,166,35,0.16); color: #f5c065; }
 @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
+/* ===== Tabs ===== */
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+  padding: 9px 16px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
+.section-intro { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 2px 18px; }
+
+/* ===== Search dropdown ===== */
+.search-field { position: relative; }
+.search-results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 30;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4); min-width: 280px; }
+.search-item { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; }
+.search-item:hover { background: var(--panel2); }
+.si-sym { font-weight: 700; font-size: 13px; min-width: 60px; }
+.si-name { flex: 1; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.si-type { font-size: 10px; color: var(--muted); background: var(--panel2); padding: 2px 6px; border-radius: 5px; }
+
+/* ===== Watchlists / screener ===== */
+.wl { margin-bottom: 22px; }
+.wl-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.wl-head h3 { margin: 0; font-size: 16px; }
+.wl-head span { color: var(--muted); font-size: 12.5px; }
+.wl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.wl-item { text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 11px;
+  padding: 13px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; color: var(--text); }
+.wl-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.wl-sym { font-weight: 700; font-size: 15px; }
+.wl-name { font-size: 12.5px; color: var(--text); }
+.wl-note { font-size: 11.5px; color: var(--muted); }
+
+/* ===== Paper trading ===== */
+.pf-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 640px) { .pf-summary { grid-template-columns: repeat(2, 1fr); } }
+.pf-stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; }
+.pf-stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+.pf-stat .n { font-size: 22px; font-weight: 700; }
+.pf-stat .n.buy { color: var(--buy); }
+.pf-stat .n.sell { color: var(--sell); }
+.trade-card { margin-bottom: 18px; }
+.trade-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.trade-form input { width: 120px; }
+.trade-price { font-size: 16px; font-weight: 700; font-family: ui-monospace, monospace; padding: 9px 0; min-width: 90px; }
+.btn-buy { background: linear-gradient(180deg,#16c784,#0fa568); border: none; color: #032015; font-weight: 700;
+  padding: 10px 22px; border-radius: 9px; cursor: pointer; font-size: 14px; }
+.btn-sell { background: linear-gradient(180deg,#e75f6a,#cf3340); border: none; color: #fff; font-weight: 700;
+  padding: 10px 22px; border-radius: 9px; cursor: pointer; font-size: 14px; }
+.trade-msg { margin-top: 12px; font-size: 13px; min-height: 18px; }
+.trade-msg.err { color: var(--sell); }
+.trade-msg.ok { color: var(--buy); }
+.pf-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pf-head h2 { margin: 0; }
+.table-wrap { overflow-x: auto; }
+.pf-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pf-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.pf-table td { padding: 10px; border-bottom: 1px solid var(--border); font-family: ui-monospace, monospace; }
+.pf-table td.buy { color: var(--buy); }
+.pf-table td.sell { color: var(--sell); }
+.pf-table td.empty { text-align: center; color: var(--muted); font-family: inherit; padding: 22px; }
+
 </style>
 </head>
 <body>
@@ -313,7 +375,7 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
         <button id="authSubmit" type="submit">Sign up — free</button>
       </form>
       <div id="authToggle" class="auth-toggle"></div>
-      <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required. See the note at the bottom of the app about real payments.</p>
+      <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required.</p>
     </div>
   </div>
 
@@ -322,12 +384,10 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
     <header>
       <div>
         <h1><span class="spark">▲</span> SignalDesk</h1>
-        <div class="sub">Multi-indicator buy / sell signal engine · any asset · technicals + fundamentals</div>
+        <div class="sub">Signals · any asset · income &amp; growth · paper trading</div>
       </div>
       <div class="userbar">
-        <span id="ownerViewAs" class="owner-viewas hidden">
-          <select id="viewAsSel"></select>
-        </span>
+        <span id="ownerViewAs" class="owner-viewas hidden"><select id="viewAsSel"></select></span>
         <span id="tierBadge" class="tier-badge t-free">FREE</span>
         <span id="userEmail" class="user-email"></span>
         <button id="upgradeBtn" class="btn-upgrade">Upgrade</button>
@@ -337,105 +397,166 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 
     <div id="newsTicker" class="news-ticker hidden">
       <span class="news-label">📰 LIVE</span>
-      <div class="news-track-wrap">
-        <div id="newsTrack" class="news-track"></div>
-      </div>
+      <div class="news-track-wrap"><div id="newsTrack" class="news-track"></div></div>
     </div>
 
     <div class="wrap">
-      <div id="demoBanner" class="demo-banner hidden">
-        ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source. If you opened
-        this as a downloaded file in <b>Safari</b>, try <b>Chrome</b> or the hosted link instead.
-      </div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="analyze">📊 Analyze</button>
+        <button class="tab" data-tab="screener" id="tabScreenerBtn">💰 Income &amp; Growth</button>
+        <button class="tab" data-tab="paper" id="tabPaperBtn">🎮 Paper Trading</button>
+      </nav>
 
-      <div class="controls">
-        <div class="field">
-          <label for="preset">Quick pick</label>
-          <select id="preset"></select>
+      <!-- ============ ANALYZE ============ -->
+      <section id="tab-analyze" class="tabview">
+        <div id="demoBanner" class="demo-banner hidden">
+          ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source right now.
         </div>
-        <div class="field">
-          <label for="symbol">Symbol (any asset)</label>
-          <input id="symbol" value="BTCUSDT" spellcheck="false" />
-        </div>
-        <div class="field">
-          <label for="interval">Timeframe</label>
-          <select id="interval"></select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button id="analyzeBtn">Analyze</button>
-        </div>
-      </div>
-      <div class="examples">
-        Try: <code>AAPL</code> <code>TSLA</code> <code>NVDA</code> <code>SPY</code> (stocks/ETFs) ·
-        <code>BTCUSDT</code> <code>ETHUSDT</code> (crypto) ·
-        <code>EURUSD=X</code> (forex) · <code>GC=F</code> gold · <code>^GSPC</code> S&amp;P 500
-      </div>
 
-      <div id="status" class="status">Loading…</div>
+        <div class="controls">
+          <div class="field">
+            <label for="preset">Quick pick</label>
+            <select id="preset"></select>
+          </div>
+          <div class="field search-field">
+            <label for="symbol">Search or enter symbol</label>
+            <input id="symbol" value="BTCUSDT" spellcheck="false" autocomplete="off" placeholder="e.g. Apple, TSLA, gold…" />
+            <div id="searchResults" class="search-results hidden"></div>
+          </div>
+          <div class="field">
+            <label for="interval">Timeframe</label>
+            <select id="interval"></select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="analyzeBtn">Analyze</button>
+          </div>
+        </div>
+        <div class="examples">
+          Search any name or ticker — stocks, ETFs, funds, crypto, forex, commodities. Try
+          <code>AAPL</code> <code>SCHD</code> <code>VOO</code> <code>BTCUSDT</code> <code>EURUSD=X</code> <code>GC=F</code>.
+        </div>
 
-      <div id="results" class="hidden">
-        <div class="grid">
-          <div class="card verdict-card">
-            <h2>Signal</h2>
-            <div id="verdict" class="verdict hold">—</div>
-            <div class="verdict-stats">
-              <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
-              <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
-              <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+        <div id="status" class="status">Loading…</div>
+
+        <div id="results" class="hidden">
+          <div class="grid">
+            <div class="card verdict-card">
+              <h2>Signal</h2>
+              <div id="verdict" class="verdict hold">—</div>
+              <div class="verdict-stats">
+                <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
+                <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
+                <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+              </div>
+              <div>
+                <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
+                <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+              </div>
             </div>
-            <div>
-              <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
-              <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+
+            <div class="card" id="planCard">
+              <h2>Suggested trade plan (ATR-based)</h2>
+              <div id="plan"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="plainEnglishCard">
+              <h2>📖 Plain-English summary</h2>
+              <p id="plainEnglish" class="plain-english"></p>
+            </div>
+
+            <div class="card chart-card">
+              <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+              <canvas id="chart"></canvas>
+            </div>
+
+            <div class="card">
+              <h2>Indicator snapshot</h2>
+              <div id="snapshot" class="metrics"></div>
+            </div>
+
+            <div class="card" id="fundamentals">
+              <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
+              <div id="fundMetrics" class="metrics"></div>
+              <ul id="fundReasons" class="fund-reasons"></ul>
+            </div>
+
+            <div class="card chart-card">
+              <h2>Why — weighted indicator breakdown</h2>
+              <div id="breakdown"></div>
+              <div id="adxNote" class="adx-note"></div>
+              <div id="blendNote" class="blend-note"></div>
             </div>
           </div>
 
-          <div class="card" id="planCard">
-            <h2>Suggested trade plan (ATR-based)</h2>
-            <div id="plan"></div>
+          <div class="disclaimer">
+            <strong>Not financial advice.</strong> SignalDesk is an educational tool. It computes well-known
+            indicators mechanically — it does <em>not</em> predict the future, and no setup produces guaranteed wins.
+            Signals can and will be wrong. Always use a stop-loss and do your own research.
           </div>
-
-          <div class="card chart-card hidden" id="plainEnglishCard">
-            <h2>📖 Plain-English summary</h2>
-            <p id="plainEnglish" class="plain-english"></p>
+          <div class="backend-note">
+            💡 <b>For monetization:</b> the sign-in and plans are a working front-end demo. Real, enforceable
+            subscriptions need a small backend (auth + a payment provider like Stripe). The code is structured to
+            plug into that when you're ready.
           </div>
+        </div>
+      </section>
 
-          <div class="card chart-card">
-            <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
-            <canvas id="chart"></canvas>
+      <!-- ============ INCOME & GROWTH ============ -->
+      <section id="tab-screener" class="tabview hidden">
+        <p class="section-intro">Curated watchlists for income and long-term growth. Click any holding to run a full
+          signal analysis. <b>Yields and fees are approximate</b> — verify current figures before investing.</p>
+        <div id="screenerContent"></div>
+      </section>
+
+      <!-- ============ PAPER TRADING ============ -->
+      <section id="tab-paper" class="tabview hidden">
+        <p class="section-intro">Practice with <b>$100,000 of simulated cash</b>, trading at real live prices. No real
+          money, no real orders — just a sandbox to test ideas.</p>
+
+        <div class="pf-summary">
+          <div class="pf-stat"><div class="l">Total value</div><div id="pfTotal" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Cash</div><div id="pfCash" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Holdings</div><div id="pfHoldings" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Total P&amp;L</div><div id="pfPnl" class="n">—</div></div>
+        </div>
+
+        <div class="card trade-card">
+          <h2>Place a simulated order</h2>
+          <div class="trade-form">
+            <div class="field"><label for="tradeSymbol">Symbol</label><input id="tradeSymbol" placeholder="AAPL" autocomplete="off" /></div>
+            <div class="field"><label for="tradeQty">Quantity</label><input id="tradeQty" type="number" min="0" step="any" placeholder="10" /></div>
+            <div class="field"><label>Live price</label><div id="tradePrice" class="trade-price">—</div></div>
+            <div class="field"><label>&nbsp;</label><button id="quoteBtn" class="btn-ghost">Get price</button></div>
+            <div class="field"><label>&nbsp;</label><button id="tradeBuy" class="btn-buy">Buy</button></div>
+            <div class="field"><label>&nbsp;</label><button id="tradeSell" class="btn-sell">Sell</button></div>
           </div>
+          <div id="tradeMsg" class="trade-msg"></div>
+        </div>
 
-          <div class="card">
-            <h2>Indicator snapshot</h2>
-            <div id="snapshot" class="metrics"></div>
+        <div class="card">
+          <div class="pf-head"><h2>Positions</h2>
+            <span><button id="refreshPaper" class="btn-ghost">↻ Refresh prices</button>
+            <button id="resetPaper" class="btn-ghost">Reset portfolio</button></span>
           </div>
-
-          <div class="card" id="fundamentals">
-            <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
-            <div id="fundMetrics" class="metrics"></div>
-            <ul id="fundReasons" class="fund-reasons"></ul>
-          </div>
-
-          <div class="card chart-card">
-            <h2>Why — weighted indicator breakdown</h2>
-            <div id="breakdown"></div>
-            <div id="adxNote" class="adx-note"></div>
-            <div id="blendNote" class="blend-note"></div>
+          <div class="table-wrap">
+            <table class="pf-table">
+              <thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Price</th><th>Value</th><th>P&amp;L</th></tr></thead>
+              <tbody id="positionsBody"></tbody>
+            </table>
           </div>
         </div>
 
-        <div class="disclaimer">
-          <strong>Not financial advice.</strong> SignalDesk is an educational technical-analysis tool. It computes
-          well-known indicators and combines them mechanically — it does <em>not</em> predict the future, and no
-          indicator setup produces guaranteed or "high-percentage" wins. Signals can and will be wrong. Never risk
-          money you can't afford to lose, always use a stop-loss, and do your own research.
+        <div class="card">
+          <h2>Trade history</h2>
+          <div class="table-wrap">
+            <table class="pf-table">
+              <thead><tr><th>Time</th><th>Side</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Value</th></tr></thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
         </div>
-        <div class="backend-note">
-          💡 <b>For monetization:</b> the plans below and the sign-in above are a working front-end demo. Real,
-          enforceable subscriptions need a small backend (user auth + a payment provider like Stripe) so plans can't
-          be bypassed by editing the page. The code is structured to plug into that when you're ready.
-        </div>
-      </div>
+      </section>
     </div>
   </div>
 
@@ -691,6 +812,8 @@ const TIERS = {
     fundamentals: false,
     plainEnglish: false,
     chart: true,
+    screener: false,
+    paperTrading: false,
     perks: [
       "Buy / Sell / Hold signal",
       "3 core indicators",
@@ -702,6 +825,7 @@ const TIERS = {
       "Trade plan (entry / stop / target)",
       "Full indicator suite",
       "Fundamentals",
+      "Screener & paper trading",
     ],
   },
   lite: {
@@ -717,14 +841,17 @@ const TIERS = {
     fundamentals: false,
     plainEnglish: false,
     chart: true,
+    screener: true,
+    paperTrading: false,
     perks: [
       "Everything in Free, plus:",
       "6 indicators",
       "Confidence score",
       "ATR trade plan (entry / stop / target)",
       "Hourly → weekly timeframes",
+      "Income & Growth screener",
     ],
-    locked: ["Fundamentals analysis", "Plain-English summary", "15-minute timeframe"],
+    locked: ["Fundamentals analysis", "Plain-English summary", "Paper-trading simulator"],
   },
   pro: {
     id: "pro",
@@ -739,12 +866,15 @@ const TIERS = {
     fundamentals: true,
     plainEnglish: true,
     chart: true,
+    screener: true,
+    paperTrading: true,
     perks: [
       "Everything in Lite, plus:",
       "Full 7-indicator suite + ADX trend gate",
       "Fundamentals scoring & blend",
       "Plain-English signal summary",
       "All timeframes incl. 15-minute",
+      "Paper-trading portfolio simulator",
     ],
     locked: [],
   },
@@ -874,6 +1004,179 @@ function effectiveTierId() {
   if (u.owner) return getViewAs() || "pro";
   return u.tier || "free";
 }
+
+
+// watchlists.js — curated theme lists for the Income & Growth screener.
+// Yields/notes are approximate and for orientation only — always verify current
+// figures before investing. Clicking any item runs the full signal analysis.
+
+const WATCHLISTS = [
+  {
+    id: "high-dividend",
+    title: "High-Dividend Income",
+    blurb: "Higher current yield for income-focused investors.",
+    items: [
+      { symbol: "SCHD", name: "Schwab US Dividend Equity ETF", note: "~3.5% yield · quality dividend growth" },
+      { symbol: "VYM", name: "Vanguard High Dividend Yield ETF", note: "~2.8% yield · broad large-cap" },
+      { symbol: "JEPI", name: "JPMorgan Equity Premium Income", note: "~7–9% yield · covered-call income" },
+      { symbol: "JEPQ", name: "JPMorgan Nasdaq Equity Premium", note: "~9–11% yield · tech-tilted income" },
+      { symbol: "O", name: "Realty Income (REIT)", note: "~5% yield · monthly dividend" },
+      { symbol: "SPHD", name: "Invesco S&P 500 High Div Low Vol", note: "~4% yield · low volatility" },
+      { symbol: "VZ", name: "Verizon", note: "~6% yield · telecom" },
+      { symbol: "MO", name: "Altria", note: "~8% yield · consumer staples" },
+    ],
+  },
+  {
+    id: "dividend-growth",
+    title: "Dividend Growth (Aristocrats)",
+    blurb: "Lower current yield, but a long history of raising payouts.",
+    items: [
+      { symbol: "KO", name: "Coca-Cola", note: "~3% yield · 60+ yrs of raises" },
+      { symbol: "PEP", name: "PepsiCo", note: "~3% yield · staples" },
+      { symbol: "JNJ", name: "Johnson & Johnson", note: "~3% yield · healthcare" },
+      { symbol: "PG", name: "Procter & Gamble", note: "~2.5% yield · staples" },
+      { symbol: "HD", name: "Home Depot", note: "~2.5% yield · retail" },
+      { symbol: "NOBL", name: "ProShares S&P 500 Dividend Aristocrats", note: "ETF of aristocrats" },
+      { symbol: "VIG", name: "Vanguard Dividend Appreciation ETF", note: "dividend-growth ETF" },
+    ],
+  },
+  {
+    id: "growth-etfs",
+    title: "Long-Term Growth ETFs & Funds",
+    blurb: "Broad, low-cost building blocks for long-term compounding.",
+    items: [
+      { symbol: "VOO", name: "Vanguard S&P 500 ETF", note: "0.03% fee · US large-cap" },
+      { symbol: "VTI", name: "Vanguard Total Stock Market ETF", note: "0.03% fee · entire US market" },
+      { symbol: "QQQ", name: "Invesco Nasdaq 100 ETF", note: "tech-heavy growth" },
+      { symbol: "VUG", name: "Vanguard Growth ETF", note: "US large-cap growth" },
+      { symbol: "SCHG", name: "Schwab US Large-Cap Growth", note: "low-fee growth" },
+      { symbol: "VXUS", name: "Vanguard Total International Stock", note: "ex-US diversification" },
+      { symbol: "VT", name: "Vanguard Total World Stock ETF", note: "whole-world equity" },
+    ],
+  },
+  {
+    id: "thematic-growth",
+    title: "Thematic / Sector Growth",
+    blurb: "Higher risk, higher potential — concentrated bets.",
+    items: [
+      { symbol: "SMH", name: "VanEck Semiconductor ETF", note: "chips" },
+      { symbol: "SOXX", name: "iShares Semiconductor ETF", note: "chips" },
+      { symbol: "XLK", name: "Technology Select Sector SPDR", note: "US tech" },
+      { symbol: "ARKK", name: "ARK Innovation ETF", note: "disruptive innovation · volatile" },
+      { symbol: "ICLN", name: "iShares Global Clean Energy", note: "clean energy" },
+      { symbol: "XLV", name: "Health Care Select Sector SPDR", note: "healthcare" },
+    ],
+  },
+];
+
+
+// portfolio.js — paper-trading simulator. A fake cash balance and positions,
+// stored per logged-in user in localStorage, trading at real live prices.
+// Purely simulated — no real orders, no real money.
+
+const START_CASH = 100000;
+
+function keyFor(email) {
+  return "signaldesk_portfolio_" + (email || "guest");
+}
+
+function fresh() {
+  return { cash: START_CASH, positions: {}, history: [], created: Date.now() };
+}
+
+function load(email) {
+  try {
+    const p = JSON.parse(localStorage.getItem(keyFor(email)));
+    if (p && typeof p.cash === "number" && p.positions) return p;
+  } catch {
+    /* fall through */
+  }
+  return fresh();
+}
+
+function save(email, p) {
+  localStorage.setItem(keyFor(email), JSON.stringify(p));
+}
+
+function reset(email) {
+  const p = fresh();
+  save(email, p);
+  return p;
+}
+
+// Execute a simulated market order. side: "buy" | "sell". Returns {error} or {ok, portfolio}.
+function trade(email, side, symbol, qty, price) {
+  symbol = (symbol || "").trim().toUpperCase();
+  qty = Number(qty);
+  price = Number(price);
+  if (!symbol) return { error: "Enter a symbol." };
+  if (!(qty > 0)) return { error: "Quantity must be greater than zero." };
+  if (!(price > 0)) return { error: "No live price available for this symbol." };
+
+  const p = load(email);
+  const cost = qty * price;
+
+  if (side === "buy") {
+    if (cost > p.cash + 1e-6) return { error: `Not enough cash. Need $${cost.toFixed(2)}, have $${p.cash.toFixed(2)}.` };
+    p.cash -= cost;
+    const pos = p.positions[symbol] || { qty: 0, avgCost: 0 };
+    const newQty = pos.qty + qty;
+    pos.avgCost = (pos.qty * pos.avgCost + qty * price) / newQty;
+    pos.qty = newQty;
+    p.positions[symbol] = pos;
+  } else if (side === "sell") {
+    const pos = p.positions[symbol];
+    if (!pos || pos.qty < qty - 1e-9) return { error: `You only hold ${pos ? pos.qty : 0} ${symbol}.` };
+    p.cash += cost;
+    const realized = (price - pos.avgCost) * qty;
+    pos.qty -= qty;
+    if (pos.qty <= 1e-9) delete p.positions[symbol];
+    else p.positions[symbol] = pos;
+    p.lastRealized = realized;
+  } else {
+    return { error: "Unknown order side." };
+  }
+
+  p.history.unshift({ ts: Date.now(), side, symbol, qty, price, value: cost });
+  p.history = p.history.slice(0, 100);
+  save(email, p);
+  return { ok: true, portfolio: p };
+}
+
+// Given a portfolio and a {symbol: price} map, compute valuation + P&L.
+function value(p, prices) {
+  let holdingsValue = 0;
+  let costBasis = 0;
+  const rows = [];
+  for (const [sym, pos] of Object.entries(p.positions)) {
+    const price = prices[sym];
+    const mkt = price != null ? pos.qty * price : null;
+    const basis = pos.qty * pos.avgCost;
+    if (mkt != null) holdingsValue += mkt;
+    costBasis += basis;
+    rows.push({
+      symbol: sym,
+      qty: pos.qty,
+      avgCost: pos.avgCost,
+      price: price ?? null,
+      marketValue: mkt,
+      pnl: mkt != null ? mkt - basis : null,
+      pnlPct: mkt != null && basis > 0 ? ((mkt - basis) / basis) * 100 : null,
+    });
+  }
+  rows.sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
+  const total = p.cash + holdingsValue;
+  return {
+    cash: p.cash,
+    holdingsValue,
+    total,
+    totalPnl: total - START_CASH,
+    totalPnlPct: ((total - START_CASH) / START_CASH) * 100,
+    rows,
+  };
+}
+
+const STARTING_CASH = START_CASH;
 
 
 // data.js
@@ -1073,6 +1376,44 @@ async function fromYahoo(symbol, interval, limit) {
     }
   }
   throw new Error(lastErr || "unreachable");
+}
+
+// Search any asset by name or ticker (stocks, ETFs, funds, crypto, forex…).
+// Uses Yahoo's search endpoint through the same CORS proxies.
+async function searchSymbols(query) {
+  const q = (query || "").trim();
+  if (q.length < 1) return [];
+  const target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(
+    q
+  )}&quotesCount=10&newsCount=0`;
+  for (const wrap of YF_PROXIES) {
+    try {
+      const res = await tfetch(wrap(target), 5000);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const quotes = (json && json.quotes) || [];
+      const out = quotes
+        .filter((x) => x.symbol && x.quoteType !== "OPTION")
+        .map((x) => ({
+          symbol: x.symbol,
+          name: x.shortname || x.longname || x.symbol,
+          type: (x.quoteType || "").toUpperCase(),
+          exchange: x.exchDisp || x.exchange || "",
+        }));
+      if (out.length) return out;
+    } catch {
+      /* next proxy */
+    }
+  }
+  return [];
+}
+
+// Latest price for a symbol (used by the paper-trading portfolio). Reuses the
+// full candle fetch and returns the most recent close.
+async function fetchQuote(symbol) {
+  const candles = await fetchCandles(symbol, "1d", 60);
+  if (!candles || !candles.length) throw new Error("no price");
+  return { price: candles[candles.length - 1].close, source: candles._source };
 }
 
 function parseYahoo(json, agg, limit) {
@@ -1690,6 +2031,8 @@ function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
 
 
 
+
+
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
   {
@@ -1947,7 +2290,24 @@ function render(r, symbol, tier) {
     fundWrap.classList.add("hidden");
   }
 
-  drawChart(state.candles, r.indicators);
+  scheduleChart(state.candles, r.indicators);
+}
+
+// Draw on the next frame (after layout) and never let a draw error blank the UI.
+function scheduleChart(candles, ind) {
+  requestAnimationFrame(() => {
+    const cv = $("chart");
+    if (!cv) return;
+    if (cv.clientWidth === 0) {
+      setTimeout(() => scheduleChart(candles, ind), 120); // not laid out yet
+      return;
+    }
+    try {
+      drawChart(candles, ind);
+    } catch (e) {
+      console.error("chart draw failed:", e);
+    }
+  });
 }
 
 // ---------------- News ticker ----------------
@@ -2222,6 +2582,7 @@ function applyTier() {
   const tier = currentTier();
   buildIntervalOptions(tier);
   renderUserBar();
+  refreshTabLocks();
 }
 
 // ---------------- Pricing modal ----------------
@@ -2304,6 +2665,214 @@ function submitAuth(e) {
   initNews();
 }
 
+// ---------------- Tabs ----------------
+function switchTab(name) {
+  const tier = currentTier();
+  if (name === "screener" && !tier.screener) return openPricing();
+  if (name === "paper" && !tier.paperTrading) return openPricing();
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tabview").forEach((v) => v.classList.add("hidden"));
+  $("tab-" + name).classList.remove("hidden");
+  if (name === "screener") renderScreener();
+  if (name === "paper") renderPaper();
+}
+
+function refreshTabLocks() {
+  const tier = currentTier();
+  $("tabScreenerBtn").textContent = (tier.screener ? "💰" : "🔒") + " Income & Growth";
+  $("tabPaperBtn").textContent = (tier.paperTrading ? "🎮" : "🔒") + " Paper Trading";
+  const active = document.querySelector(".tab.active");
+  if (active) {
+    const t = active.dataset.tab;
+    if ((t === "screener" && !tier.screener) || (t === "paper" && !tier.paperTrading)) switchTab("analyze");
+  }
+}
+
+// ---------------- Symbol search (autocomplete) ----------------
+let searchTimer = null;
+function onSymbolInput(e) {
+  const q = e.target.value.trim();
+  clearTimeout(searchTimer);
+  if (q.length < 2) return hideSearch();
+  searchTimer = setTimeout(async () => {
+    let results = [];
+    try {
+      results = await searchSymbols(q);
+    } catch {
+      /* ignore */
+    }
+    renderSearch(results);
+  }, 250);
+}
+function renderSearch(results) {
+  const box = $("searchResults");
+  box.innerHTML = "";
+  if (!results.length) return hideSearch();
+  results.slice(0, 8).forEach((r) => {
+    const d = document.createElement("div");
+    d.className = "search-item";
+    const sym = document.createElement("span");
+    sym.className = "si-sym";
+    sym.textContent = r.symbol;
+    const nm = document.createElement("span");
+    nm.className = "si-name";
+    nm.textContent = r.name;
+    const ty = document.createElement("span");
+    ty.className = "si-type";
+    ty.textContent = r.type || "";
+    d.append(sym, nm, ty);
+    d.onclick = () => {
+      $("symbol").value = r.symbol;
+      hideSearch();
+      run();
+    };
+    box.appendChild(d);
+  });
+  box.classList.remove("hidden");
+}
+function hideSearch() {
+  $("searchResults").classList.add("hidden");
+}
+
+// ---------------- Income & Growth screener ----------------
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+function renderScreener() {
+  const el = $("screenerContent");
+  el.innerHTML = WATCHLISTS.map(
+    (w) => `
+    <div class="wl">
+      <div class="wl-head"><h3>${esc(w.title)}</h3><span>${esc(w.blurb)}</span></div>
+      <div class="wl-grid">
+        ${w.items
+          .map(
+            (it) => `<button class="wl-item" data-sym="${esc(it.symbol)}">
+            <span class="wl-sym">${esc(it.symbol)}</span>
+            <span class="wl-name">${esc(it.name)}</span>
+            <span class="wl-note">${esc(it.note || "")}</span>
+          </button>`
+          )
+          .join("")}
+      </div>
+    </div>`
+  ).join("");
+  el.querySelectorAll(".wl-item").forEach((b) => {
+    b.onclick = () => {
+      $("symbol").value = b.dataset.sym;
+      switchTab("analyze");
+      run();
+    };
+  });
+}
+
+// ---------------- Paper trading ----------------
+function pfEmail() {
+  const u = auth.getUser();
+  return u ? u.email : "guest";
+}
+function trimQty(q) {
+  return Number(q).toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+async function renderPaper() {
+  const email = pfEmail();
+  const p = portfolio.load(email);
+  const syms = Object.keys(p.positions);
+  const prices = {};
+  await Promise.all(
+    syms.map(async (s) => {
+      try {
+        prices[s] = (await fetchQuote(s)).price;
+      } catch {
+        prices[s] = null;
+      }
+    })
+  );
+  const v = portfolio.value(p, prices);
+  $("pfTotal").textContent = "$" + fmt(v.total);
+  $("pfCash").textContent = "$" + fmt(v.cash);
+  $("pfHoldings").textContent = "$" + fmt(v.holdingsValue);
+  const pnl = $("pfPnl");
+  pnl.textContent =
+    (v.totalPnl >= 0 ? "+$" : "-$") +
+    fmt(Math.abs(v.totalPnl)) +
+    ` (${v.totalPnlPct >= 0 ? "+" : ""}${v.totalPnlPct.toFixed(2)}%)`;
+  pnl.className = "n " + (v.totalPnl >= 0 ? "buy" : "sell");
+
+  $("positionsBody").innerHTML = v.rows.length
+    ? v.rows
+        .map(
+          (r) => `<tr>
+        <td>${esc(r.symbol)}</td>
+        <td>${trimQty(r.qty)}</td>
+        <td>$${fmt(r.avgCost)}</td>
+        <td>${r.price != null ? "$" + fmt(r.price) : "—"}</td>
+        <td>${r.marketValue != null ? "$" + fmt(r.marketValue) : "—"}</td>
+        <td class="${r.pnl >= 0 ? "buy" : "sell"}">${
+            r.pnl != null
+              ? (r.pnl >= 0 ? "+" : "-") + "$" + fmt(Math.abs(r.pnl)) + ` (${r.pnlPct >= 0 ? "+" : ""}${r.pnlPct.toFixed(1)}%)`
+              : "—"
+          }</td></tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="empty">No positions yet — buy something above.</td></tr>`;
+
+  $("historyBody").innerHTML = p.history.length
+    ? p.history
+        .map(
+          (h) => `<tr>
+        <td>${new Date(h.ts).toLocaleString()}</td>
+        <td class="${h.side === "buy" ? "buy" : "sell"}">${h.side.toUpperCase()}</td>
+        <td>${esc(h.symbol)}</td><td>${trimQty(h.qty)}</td><td>$${fmt(h.price)}</td><td>$${fmt(h.value)}</td></tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="empty">No trades yet.</td></tr>`;
+}
+
+async function doQuote() {
+  const sym = $("tradeSymbol").value.trim().toUpperCase();
+  const el = $("tradePrice");
+  if (!sym) {
+    el.textContent = "—";
+    el.dataset.price = "";
+    return null;
+  }
+  el.textContent = "…";
+  try {
+    const q = await fetchQuote(sym);
+    el.dataset.price = q.price;
+    el.textContent = "$" + fmt(q.price);
+    return q.price;
+  } catch {
+    el.textContent = "n/a";
+    el.dataset.price = "";
+    return null;
+  }
+}
+async function doTrade(side) {
+  const email = pfEmail();
+  const sym = $("tradeSymbol").value.trim().toUpperCase();
+  const qty = parseFloat($("tradeQty").value);
+  let price = parseFloat($("tradePrice").dataset.price || "");
+  const msg = $("tradeMsg");
+  if (!price) {
+    msg.textContent = "Fetching live price…";
+    msg.className = "trade-msg";
+    price = await doQuote();
+  }
+  const res = portfolio.trade(email, side, sym, qty, price);
+  if (res.error) {
+    msg.textContent = res.error;
+    msg.className = "trade-msg err";
+  } else {
+    msg.textContent = `${side === "buy" ? "Bought" : "Sold"} ${trimQty(qty)} ${sym} @ $${fmt(price)}.`;
+    msg.className = "trade-msg ok";
+    renderPaper();
+  }
+}
+
 // ---------------- Boot ----------------
 window.addEventListener("DOMContentLoaded", () => {
   buildPresetOptions();
@@ -2314,12 +2883,42 @@ window.addEventListener("DOMContentLoaded", () => {
       run();
     }
   });
-  $("analyzeBtn").addEventListener("click", run);
+  $("analyzeBtn").addEventListener("click", () => {
+    hideSearch();
+    run();
+  });
   $("symbol").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") run();
+    if (e.key === "Enter") {
+      hideSearch();
+      run();
+    }
+  });
+  $("symbol").addEventListener("input", onSymbolInput);
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".search-field")) hideSearch();
   });
   window.addEventListener("resize", () => {
-    if (state.result) drawChart(state.candles, state.result.indicators);
+    if (state.result) scheduleChart(state.candles, state.result.indicators);
+  });
+
+  // tabs
+  document.querySelectorAll(".tab").forEach((b) =>
+    b.addEventListener("click", () => switchTab(b.dataset.tab))
+  );
+
+  // paper trading controls
+  $("quoteBtn").addEventListener("click", doQuote);
+  $("tradeBuy").addEventListener("click", () => doTrade("buy"));
+  $("tradeSell").addEventListener("click", () => doTrade("sell"));
+  $("refreshPaper").addEventListener("click", renderPaper);
+  $("resetPaper").addEventListener("click", () => {
+    if (confirm("Reset your paper portfolio back to $100,000 cash? This clears all positions and history.")) {
+      portfolio.reset(pfEmail());
+      renderPaper();
+    }
+  });
+  $("tradeSymbol").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doQuote();
   });
 
   // header buttons
@@ -2361,6 +2960,7 @@ window.addEventListener("DOMContentLoaded", () => {
 // --- module glue for single-file build (after sources to avoid TDZ) ---
 var ta = { sma, ema, rsi, macd, bollinger, stochastic, atr, obv, adx, last, prev };
 var auth = { signup, login, logout, getUser, setTier, setViewAs, getViewAs, effectiveTierId, isOwnerEmail, OWNER_EMAILS };
+var portfolio = { load, save, reset, trade, value, STARTING_CASH };
 
 </script>
 </body>

@@ -18,6 +18,12 @@ weighted score — always showing *why*, never a black box.
   can "view as" any tier. (Real payment enforcement needs a backend — see below.)
 - **Live news ticker** — scrolling market headlines (CryptoCompare + Yahoo RSS)
   tagged to the listed assets.
+- **Search any asset** — type a name or ticker for live Yahoo symbol search
+  (stocks, ETFs, funds, crypto, forex, commodities).
+- **Income & Growth screener** — curated high-dividend, dividend-growth and
+  long-term growth ETF/fund watchlists; click any holding to analyze it.
+- **Paper trading** — a simulated $100k portfolio that trades at real live
+  prices, with positions, unrealized P&L and trade history (stored per user).
 
 ## What it does
 

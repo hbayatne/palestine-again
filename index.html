@@ -19,7 +19,7 @@
         <button id="authSubmit" type="submit">Sign up — free</button>
       </form>
       <div id="authToggle" class="auth-toggle"></div>
-      <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required. See the note at the bottom of the app about real payments.</p>
+      <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required.</p>
     </div>
   </div>
 
@@ -28,12 +28,10 @@
     <header>
       <div>
         <h1><span class="spark">▲</span> SignalDesk</h1>
-        <div class="sub">Multi-indicator buy / sell signal engine · any asset · technicals + fundamentals</div>
+        <div class="sub">Signals · any asset · income &amp; growth · paper trading</div>
       </div>
       <div class="userbar">
-        <span id="ownerViewAs" class="owner-viewas hidden">
-          <select id="viewAsSel"></select>
-        </span>
+        <span id="ownerViewAs" class="owner-viewas hidden"><select id="viewAsSel"></select></span>
         <span id="tierBadge" class="tier-badge t-free">FREE</span>
         <span id="userEmail" class="user-email"></span>
         <button id="upgradeBtn" class="btn-upgrade">Upgrade</button>
@@ -43,105 +41,166 @@
 
     <div id="newsTicker" class="news-ticker hidden">
       <span class="news-label">📰 LIVE</span>
-      <div class="news-track-wrap">
-        <div id="newsTrack" class="news-track"></div>
-      </div>
+      <div class="news-track-wrap"><div id="newsTrack" class="news-track"></div></div>
     </div>
 
     <div class="wrap">
-      <div id="demoBanner" class="demo-banner hidden">
-        ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source. If you opened
-        this as a downloaded file in <b>Safari</b>, try <b>Chrome</b> or the hosted link instead.
-      </div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="analyze">📊 Analyze</button>
+        <button class="tab" data-tab="screener" id="tabScreenerBtn">💰 Income &amp; Growth</button>
+        <button class="tab" data-tab="paper" id="tabPaperBtn">🎮 Paper Trading</button>
+      </nav>
 
-      <div class="controls">
-        <div class="field">
-          <label for="preset">Quick pick</label>
-          <select id="preset"></select>
+      <!-- ============ ANALYZE ============ -->
+      <section id="tab-analyze" class="tabview">
+        <div id="demoBanner" class="demo-banner hidden">
+          ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source right now.
         </div>
-        <div class="field">
-          <label for="symbol">Symbol (any asset)</label>
-          <input id="symbol" value="BTCUSDT" spellcheck="false" />
-        </div>
-        <div class="field">
-          <label for="interval">Timeframe</label>
-          <select id="interval"></select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button id="analyzeBtn">Analyze</button>
-        </div>
-      </div>
-      <div class="examples">
-        Try: <code>AAPL</code> <code>TSLA</code> <code>NVDA</code> <code>SPY</code> (stocks/ETFs) ·
-        <code>BTCUSDT</code> <code>ETHUSDT</code> (crypto) ·
-        <code>EURUSD=X</code> (forex) · <code>GC=F</code> gold · <code>^GSPC</code> S&amp;P 500
-      </div>
 
-      <div id="status" class="status">Loading…</div>
+        <div class="controls">
+          <div class="field">
+            <label for="preset">Quick pick</label>
+            <select id="preset"></select>
+          </div>
+          <div class="field search-field">
+            <label for="symbol">Search or enter symbol</label>
+            <input id="symbol" value="BTCUSDT" spellcheck="false" autocomplete="off" placeholder="e.g. Apple, TSLA, gold…" />
+            <div id="searchResults" class="search-results hidden"></div>
+          </div>
+          <div class="field">
+            <label for="interval">Timeframe</label>
+            <select id="interval"></select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="analyzeBtn">Analyze</button>
+          </div>
+        </div>
+        <div class="examples">
+          Search any name or ticker — stocks, ETFs, funds, crypto, forex, commodities. Try
+          <code>AAPL</code> <code>SCHD</code> <code>VOO</code> <code>BTCUSDT</code> <code>EURUSD=X</code> <code>GC=F</code>.
+        </div>
 
-      <div id="results" class="hidden">
-        <div class="grid">
-          <div class="card verdict-card">
-            <h2>Signal</h2>
-            <div id="verdict" class="verdict hold">—</div>
-            <div class="verdict-stats">
-              <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
-              <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
-              <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+        <div id="status" class="status">Loading…</div>
+
+        <div id="results" class="hidden">
+          <div class="grid">
+            <div class="card verdict-card">
+              <h2>Signal</h2>
+              <div id="verdict" class="verdict hold">—</div>
+              <div class="verdict-stats">
+                <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
+                <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
+                <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+              </div>
+              <div>
+                <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
+                <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+              </div>
             </div>
-            <div>
-              <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
-              <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+
+            <div class="card" id="planCard">
+              <h2>Suggested trade plan (ATR-based)</h2>
+              <div id="plan"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="plainEnglishCard">
+              <h2>📖 Plain-English summary</h2>
+              <p id="plainEnglish" class="plain-english"></p>
+            </div>
+
+            <div class="card chart-card">
+              <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+              <canvas id="chart"></canvas>
+            </div>
+
+            <div class="card">
+              <h2>Indicator snapshot</h2>
+              <div id="snapshot" class="metrics"></div>
+            </div>
+
+            <div class="card" id="fundamentals">
+              <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
+              <div id="fundMetrics" class="metrics"></div>
+              <ul id="fundReasons" class="fund-reasons"></ul>
+            </div>
+
+            <div class="card chart-card">
+              <h2>Why — weighted indicator breakdown</h2>
+              <div id="breakdown"></div>
+              <div id="adxNote" class="adx-note"></div>
+              <div id="blendNote" class="blend-note"></div>
             </div>
           </div>
 
-          <div class="card" id="planCard">
-            <h2>Suggested trade plan (ATR-based)</h2>
-            <div id="plan"></div>
+          <div class="disclaimer">
+            <strong>Not financial advice.</strong> SignalDesk is an educational tool. It computes well-known
+            indicators mechanically — it does <em>not</em> predict the future, and no setup produces guaranteed wins.
+            Signals can and will be wrong. Always use a stop-loss and do your own research.
           </div>
-
-          <div class="card chart-card hidden" id="plainEnglishCard">
-            <h2>📖 Plain-English summary</h2>
-            <p id="plainEnglish" class="plain-english"></p>
+          <div class="backend-note">
+            💡 <b>For monetization:</b> the sign-in and plans are a working front-end demo. Real, enforceable
+            subscriptions need a small backend (auth + a payment provider like Stripe). The code is structured to
+            plug into that when you're ready.
           </div>
+        </div>
+      </section>
 
-          <div class="card chart-card">
-            <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
-            <canvas id="chart"></canvas>
+      <!-- ============ INCOME & GROWTH ============ -->
+      <section id="tab-screener" class="tabview hidden">
+        <p class="section-intro">Curated watchlists for income and long-term growth. Click any holding to run a full
+          signal analysis. <b>Yields and fees are approximate</b> — verify current figures before investing.</p>
+        <div id="screenerContent"></div>
+      </section>
+
+      <!-- ============ PAPER TRADING ============ -->
+      <section id="tab-paper" class="tabview hidden">
+        <p class="section-intro">Practice with <b>$100,000 of simulated cash</b>, trading at real live prices. No real
+          money, no real orders — just a sandbox to test ideas.</p>
+
+        <div class="pf-summary">
+          <div class="pf-stat"><div class="l">Total value</div><div id="pfTotal" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Cash</div><div id="pfCash" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Holdings</div><div id="pfHoldings" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Total P&amp;L</div><div id="pfPnl" class="n">—</div></div>
+        </div>
+
+        <div class="card trade-card">
+          <h2>Place a simulated order</h2>
+          <div class="trade-form">
+            <div class="field"><label for="tradeSymbol">Symbol</label><input id="tradeSymbol" placeholder="AAPL" autocomplete="off" /></div>
+            <div class="field"><label for="tradeQty">Quantity</label><input id="tradeQty" type="number" min="0" step="any" placeholder="10" /></div>
+            <div class="field"><label>Live price</label><div id="tradePrice" class="trade-price">—</div></div>
+            <div class="field"><label>&nbsp;</label><button id="quoteBtn" class="btn-ghost">Get price</button></div>
+            <div class="field"><label>&nbsp;</label><button id="tradeBuy" class="btn-buy">Buy</button></div>
+            <div class="field"><label>&nbsp;</label><button id="tradeSell" class="btn-sell">Sell</button></div>
           </div>
+          <div id="tradeMsg" class="trade-msg"></div>
+        </div>
 
-          <div class="card">
-            <h2>Indicator snapshot</h2>
-            <div id="snapshot" class="metrics"></div>
+        <div class="card">
+          <div class="pf-head"><h2>Positions</h2>
+            <span><button id="refreshPaper" class="btn-ghost">↻ Refresh prices</button>
+            <button id="resetPaper" class="btn-ghost">Reset portfolio</button></span>
           </div>
-
-          <div class="card" id="fundamentals">
-            <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
-            <div id="fundMetrics" class="metrics"></div>
-            <ul id="fundReasons" class="fund-reasons"></ul>
-          </div>
-
-          <div class="card chart-card">
-            <h2>Why — weighted indicator breakdown</h2>
-            <div id="breakdown"></div>
-            <div id="adxNote" class="adx-note"></div>
-            <div id="blendNote" class="blend-note"></div>
+          <div class="table-wrap">
+            <table class="pf-table">
+              <thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Price</th><th>Value</th><th>P&amp;L</th></tr></thead>
+              <tbody id="positionsBody"></tbody>
+            </table>
           </div>
         </div>
 
-        <div class="disclaimer">
-          <strong>Not financial advice.</strong> SignalDesk is an educational technical-analysis tool. It computes
-          well-known indicators and combines them mechanically — it does <em>not</em> predict the future, and no
-          indicator setup produces guaranteed or "high-percentage" wins. Signals can and will be wrong. Never risk
-          money you can't afford to lose, always use a stop-loss, and do your own research.
+        <div class="card">
+          <h2>Trade history</h2>
+          <div class="table-wrap">
+            <table class="pf-table">
+              <thead><tr><th>Time</th><th>Side</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Value</th></tr></thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
         </div>
-        <div class="backend-note">
-          💡 <b>For monetization:</b> the plans below and the sign-in above are a working front-end demo. Real,
-          enforceable subscriptions need a small backend (user auth + a payment provider like Stripe) so plans can't
-          be bypassed by editing the page. The code is structured to plug into that when you're ready.
-        </div>
-      </div>
+      </section>
     </div>
   </div>
 

@@ -6,10 +6,14 @@ import {
   scoreFundamentals,
   syntheticCandles,
   looksLikeCrypto,
+  searchSymbols,
+  fetchQuote,
 } from "./data.js";
 import { TIERS, TIER_ORDER } from "./tiers.js";
 import * as auth from "./auth.js";
 import { fetchNews } from "./news.js";
+import { WATCHLISTS } from "./watchlists.js";
+import * as portfolio from "./portfolio.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -268,7 +272,24 @@ function render(r, symbol, tier) {
     fundWrap.classList.add("hidden");
   }
 
-  drawChart(state.candles, r.indicators);
+  scheduleChart(state.candles, r.indicators);
+}
+
+// Draw on the next frame (after layout) and never let a draw error blank the UI.
+function scheduleChart(candles, ind) {
+  requestAnimationFrame(() => {
+    const cv = $("chart");
+    if (!cv) return;
+    if (cv.clientWidth === 0) {
+      setTimeout(() => scheduleChart(candles, ind), 120); // not laid out yet
+      return;
+    }
+    try {
+      drawChart(candles, ind);
+    } catch (e) {
+      console.error("chart draw failed:", e);
+    }
+  });
 }
 
 // ---------------- News ticker ----------------
@@ -543,6 +564,7 @@ function applyTier() {
   const tier = currentTier();
   buildIntervalOptions(tier);
   renderUserBar();
+  refreshTabLocks();
 }
 
 // ---------------- Pricing modal ----------------
@@ -625,6 +647,214 @@ function submitAuth(e) {
   initNews();
 }
 
+// ---------------- Tabs ----------------
+function switchTab(name) {
+  const tier = currentTier();
+  if (name === "screener" && !tier.screener) return openPricing();
+  if (name === "paper" && !tier.paperTrading) return openPricing();
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tabview").forEach((v) => v.classList.add("hidden"));
+  $("tab-" + name).classList.remove("hidden");
+  if (name === "screener") renderScreener();
+  if (name === "paper") renderPaper();
+}
+
+function refreshTabLocks() {
+  const tier = currentTier();
+  $("tabScreenerBtn").textContent = (tier.screener ? "💰" : "🔒") + " Income & Growth";
+  $("tabPaperBtn").textContent = (tier.paperTrading ? "🎮" : "🔒") + " Paper Trading";
+  const active = document.querySelector(".tab.active");
+  if (active) {
+    const t = active.dataset.tab;
+    if ((t === "screener" && !tier.screener) || (t === "paper" && !tier.paperTrading)) switchTab("analyze");
+  }
+}
+
+// ---------------- Symbol search (autocomplete) ----------------
+let searchTimer = null;
+function onSymbolInput(e) {
+  const q = e.target.value.trim();
+  clearTimeout(searchTimer);
+  if (q.length < 2) return hideSearch();
+  searchTimer = setTimeout(async () => {
+    let results = [];
+    try {
+      results = await searchSymbols(q);
+    } catch {
+      /* ignore */
+    }
+    renderSearch(results);
+  }, 250);
+}
+function renderSearch(results) {
+  const box = $("searchResults");
+  box.innerHTML = "";
+  if (!results.length) return hideSearch();
+  results.slice(0, 8).forEach((r) => {
+    const d = document.createElement("div");
+    d.className = "search-item";
+    const sym = document.createElement("span");
+    sym.className = "si-sym";
+    sym.textContent = r.symbol;
+    const nm = document.createElement("span");
+    nm.className = "si-name";
+    nm.textContent = r.name;
+    const ty = document.createElement("span");
+    ty.className = "si-type";
+    ty.textContent = r.type || "";
+    d.append(sym, nm, ty);
+    d.onclick = () => {
+      $("symbol").value = r.symbol;
+      hideSearch();
+      run();
+    };
+    box.appendChild(d);
+  });
+  box.classList.remove("hidden");
+}
+function hideSearch() {
+  $("searchResults").classList.add("hidden");
+}
+
+// ---------------- Income & Growth screener ----------------
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+function renderScreener() {
+  const el = $("screenerContent");
+  el.innerHTML = WATCHLISTS.map(
+    (w) => `
+    <div class="wl">
+      <div class="wl-head"><h3>${esc(w.title)}</h3><span>${esc(w.blurb)}</span></div>
+      <div class="wl-grid">
+        ${w.items
+          .map(
+            (it) => `<button class="wl-item" data-sym="${esc(it.symbol)}">
+            <span class="wl-sym">${esc(it.symbol)}</span>
+            <span class="wl-name">${esc(it.name)}</span>
+            <span class="wl-note">${esc(it.note || "")}</span>
+          </button>`
+          )
+          .join("")}
+      </div>
+    </div>`
+  ).join("");
+  el.querySelectorAll(".wl-item").forEach((b) => {
+    b.onclick = () => {
+      $("symbol").value = b.dataset.sym;
+      switchTab("analyze");
+      run();
+    };
+  });
+}
+
+// ---------------- Paper trading ----------------
+function pfEmail() {
+  const u = auth.getUser();
+  return u ? u.email : "guest";
+}
+function trimQty(q) {
+  return Number(q).toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+async function renderPaper() {
+  const email = pfEmail();
+  const p = portfolio.load(email);
+  const syms = Object.keys(p.positions);
+  const prices = {};
+  await Promise.all(
+    syms.map(async (s) => {
+      try {
+        prices[s] = (await fetchQuote(s)).price;
+      } catch {
+        prices[s] = null;
+      }
+    })
+  );
+  const v = portfolio.value(p, prices);
+  $("pfTotal").textContent = "$" + fmt(v.total);
+  $("pfCash").textContent = "$" + fmt(v.cash);
+  $("pfHoldings").textContent = "$" + fmt(v.holdingsValue);
+  const pnl = $("pfPnl");
+  pnl.textContent =
+    (v.totalPnl >= 0 ? "+$" : "-$") +
+    fmt(Math.abs(v.totalPnl)) +
+    ` (${v.totalPnlPct >= 0 ? "+" : ""}${v.totalPnlPct.toFixed(2)}%)`;
+  pnl.className = "n " + (v.totalPnl >= 0 ? "buy" : "sell");
+
+  $("positionsBody").innerHTML = v.rows.length
+    ? v.rows
+        .map(
+          (r) => `<tr>
+        <td>${esc(r.symbol)}</td>
+        <td>${trimQty(r.qty)}</td>
+        <td>$${fmt(r.avgCost)}</td>
+        <td>${r.price != null ? "$" + fmt(r.price) : "—"}</td>
+        <td>${r.marketValue != null ? "$" + fmt(r.marketValue) : "—"}</td>
+        <td class="${r.pnl >= 0 ? "buy" : "sell"}">${
+            r.pnl != null
+              ? (r.pnl >= 0 ? "+" : "-") + "$" + fmt(Math.abs(r.pnl)) + ` (${r.pnlPct >= 0 ? "+" : ""}${r.pnlPct.toFixed(1)}%)`
+              : "—"
+          }</td></tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="empty">No positions yet — buy something above.</td></tr>`;
+
+  $("historyBody").innerHTML = p.history.length
+    ? p.history
+        .map(
+          (h) => `<tr>
+        <td>${new Date(h.ts).toLocaleString()}</td>
+        <td class="${h.side === "buy" ? "buy" : "sell"}">${h.side.toUpperCase()}</td>
+        <td>${esc(h.symbol)}</td><td>${trimQty(h.qty)}</td><td>$${fmt(h.price)}</td><td>$${fmt(h.value)}</td></tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="empty">No trades yet.</td></tr>`;
+}
+
+async function doQuote() {
+  const sym = $("tradeSymbol").value.trim().toUpperCase();
+  const el = $("tradePrice");
+  if (!sym) {
+    el.textContent = "—";
+    el.dataset.price = "";
+    return null;
+  }
+  el.textContent = "…";
+  try {
+    const q = await fetchQuote(sym);
+    el.dataset.price = q.price;
+    el.textContent = "$" + fmt(q.price);
+    return q.price;
+  } catch {
+    el.textContent = "n/a";
+    el.dataset.price = "";
+    return null;
+  }
+}
+async function doTrade(side) {
+  const email = pfEmail();
+  const sym = $("tradeSymbol").value.trim().toUpperCase();
+  const qty = parseFloat($("tradeQty").value);
+  let price = parseFloat($("tradePrice").dataset.price || "");
+  const msg = $("tradeMsg");
+  if (!price) {
+    msg.textContent = "Fetching live price…";
+    msg.className = "trade-msg";
+    price = await doQuote();
+  }
+  const res = portfolio.trade(email, side, sym, qty, price);
+  if (res.error) {
+    msg.textContent = res.error;
+    msg.className = "trade-msg err";
+  } else {
+    msg.textContent = `${side === "buy" ? "Bought" : "Sold"} ${trimQty(qty)} ${sym} @ $${fmt(price)}.`;
+    msg.className = "trade-msg ok";
+    renderPaper();
+  }
+}
+
 // ---------------- Boot ----------------
 window.addEventListener("DOMContentLoaded", () => {
   buildPresetOptions();
@@ -635,12 +865,42 @@ window.addEventListener("DOMContentLoaded", () => {
       run();
     }
   });
-  $("analyzeBtn").addEventListener("click", run);
+  $("analyzeBtn").addEventListener("click", () => {
+    hideSearch();
+    run();
+  });
   $("symbol").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") run();
+    if (e.key === "Enter") {
+      hideSearch();
+      run();
+    }
+  });
+  $("symbol").addEventListener("input", onSymbolInput);
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".search-field")) hideSearch();
   });
   window.addEventListener("resize", () => {
-    if (state.result) drawChart(state.candles, state.result.indicators);
+    if (state.result) scheduleChart(state.candles, state.result.indicators);
+  });
+
+  // tabs
+  document.querySelectorAll(".tab").forEach((b) =>
+    b.addEventListener("click", () => switchTab(b.dataset.tab))
+  );
+
+  // paper trading controls
+  $("quoteBtn").addEventListener("click", doQuote);
+  $("tradeBuy").addEventListener("click", () => doTrade("buy"));
+  $("tradeSell").addEventListener("click", () => doTrade("sell"));
+  $("refreshPaper").addEventListener("click", renderPaper);
+  $("resetPaper").addEventListener("click", () => {
+    if (confirm("Reset your paper portfolio back to $100,000 cash? This clears all positions and history.")) {
+      portfolio.reset(pfEmail());
+      renderPaper();
+    }
+  });
+  $("tradeSymbol").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doQuote();
   });
 
   // header buttons

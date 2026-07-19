@@ -290,3 +290,65 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 .news-item .nt.up { background: rgba(22,199,132,0.16); color: #4cd3a5; }
 .news-item .nt.macro { background: rgba(245,166,35,0.16); color: #f5c065; }
 @keyframes ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ===== Tabs ===== */
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+  padding: 9px 16px; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--panel2); color: var(--text); border-color: var(--accent); }
+.section-intro { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 2px 18px; }
+
+/* ===== Search dropdown ===== */
+.search-field { position: relative; }
+.search-results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 30;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4); min-width: 280px; }
+.search-item { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; }
+.search-item:hover { background: var(--panel2); }
+.si-sym { font-weight: 700; font-size: 13px; min-width: 60px; }
+.si-name { flex: 1; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.si-type { font-size: 10px; color: var(--muted); background: var(--panel2); padding: 2px 6px; border-radius: 5px; }
+
+/* ===== Watchlists / screener ===== */
+.wl { margin-bottom: 22px; }
+.wl-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.wl-head h3 { margin: 0; font-size: 16px; }
+.wl-head span { color: var(--muted); font-size: 12.5px; }
+.wl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.wl-item { text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 11px;
+  padding: 13px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; color: var(--text); }
+.wl-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.wl-sym { font-weight: 700; font-size: 15px; }
+.wl-name { font-size: 12.5px; color: var(--text); }
+.wl-note { font-size: 11.5px; color: var(--muted); }
+
+/* ===== Paper trading ===== */
+.pf-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 640px) { .pf-summary { grid-template-columns: repeat(2, 1fr); } }
+.pf-stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; }
+.pf-stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+.pf-stat .n { font-size: 22px; font-weight: 700; }
+.pf-stat .n.buy { color: var(--buy); }
+.pf-stat .n.sell { color: var(--sell); }
+.trade-card { margin-bottom: 18px; }
+.trade-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.trade-form input { width: 120px; }
+.trade-price { font-size: 16px; font-weight: 700; font-family: ui-monospace, monospace; padding: 9px 0; min-width: 90px; }
+.btn-buy { background: linear-gradient(180deg,#16c784,#0fa568); border: none; color: #032015; font-weight: 700;
+  padding: 10px 22px; border-radius: 9px; cursor: pointer; font-size: 14px; }
+.btn-sell { background: linear-gradient(180deg,#e75f6a,#cf3340); border: none; color: #fff; font-weight: 700;
+  padding: 10px 22px; border-radius: 9px; cursor: pointer; font-size: 14px; }
+.trade-msg { margin-top: 12px; font-size: 13px; min-height: 18px; }
+.trade-msg.err { color: var(--sell); }
+.trade-msg.ok { color: var(--buy); }
+.pf-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pf-head h2 { margin: 0; }
+.table-wrap { overflow-x: auto; }
+.pf-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pf-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.pf-table td { padding: 10px; border-bottom: 1px solid var(--border); font-family: ui-monospace, monospace; }
+.pf-table td.buy { color: var(--buy); }
+.pf-table td.sell { color: var(--sell); }
+.pf-table td.empty { text-align: center; color: var(--muted); font-family: inherit; padding: 22px; }

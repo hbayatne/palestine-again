@@ -197,6 +197,44 @@ async function fromYahoo(symbol, interval, limit) {
   throw new Error(lastErr || "unreachable");
 }
 
+// Search any asset by name or ticker (stocks, ETFs, funds, crypto, forex…).
+// Uses Yahoo's search endpoint through the same CORS proxies.
+export async function searchSymbols(query) {
+  const q = (query || "").trim();
+  if (q.length < 1) return [];
+  const target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(
+    q
+  )}&quotesCount=10&newsCount=0`;
+  for (const wrap of YF_PROXIES) {
+    try {
+      const res = await tfetch(wrap(target), 5000);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const quotes = (json && json.quotes) || [];
+      const out = quotes
+        .filter((x) => x.symbol && x.quoteType !== "OPTION")
+        .map((x) => ({
+          symbol: x.symbol,
+          name: x.shortname || x.longname || x.symbol,
+          type: (x.quoteType || "").toUpperCase(),
+          exchange: x.exchDisp || x.exchange || "",
+        }));
+      if (out.length) return out;
+    } catch {
+      /* next proxy */
+    }
+  }
+  return [];
+}
+
+// Latest price for a symbol (used by the paper-trading portfolio). Reuses the
+// full candle fetch and returns the most recent close.
+export async function fetchQuote(symbol) {
+  const candles = await fetchCandles(symbol, "1d", 60);
+  if (!candles || !candles.length) throw new Error("no price");
+  return { price: candles[candles.length - 1].close, source: candles._source };
+}
+
 function parseYahoo(json, agg, limit) {
   const r = json && json.chart && json.chart.result && json.chart.result[0];
   if (!r || !r.timestamp) {
