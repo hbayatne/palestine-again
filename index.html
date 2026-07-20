@@ -7,9 +7,10 @@
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <!-- ===== Auth overlay ===== -->
+  <!-- ===== Auth overlay (optional — opened from the side menu) ===== -->
   <div id="authOverlay" class="auth-overlay hidden">
     <div class="auth-card">
+      <button id="authClose" class="modal-close">✕</button>
       <div class="auth-brand"><span class="spark">▲</span> SignalDesk</div>
       <h2 id="authTitle">Create your account</h2>
       <form id="authForm" data-mode="signup">
@@ -19,6 +20,7 @@
         <button id="authSubmit" type="submit">Sign up — free</button>
       </form>
       <div id="authToggle" class="auth-toggle"></div>
+      <button id="authSkip" class="auth-skip">Continue without signing in →</button>
       <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required.</p>
     </div>
   </div>
@@ -31,13 +33,30 @@
         <div class="sub">Signals · any asset · income &amp; growth · paper trading</div>
       </div>
       <div class="userbar">
-        <span id="ownerViewAs" class="owner-viewas hidden"><select id="viewAsSel"></select></span>
-        <span id="tierBadge" class="tier-badge t-free">FREE</span>
-        <span id="userEmail" class="user-email"></span>
-        <button id="upgradeBtn" class="btn-upgrade">Upgrade</button>
-        <button id="logoutBtn" class="btn-ghost">Log out</button>
+        <span id="tierBadge" class="tier-badge t-pro">PRO</span>
+        <button id="menuBtn" class="btn-ghost">☰ Account</button>
       </div>
     </header>
+
+    <!-- ===== Side menu (account / tiers — optional in dev mode) ===== -->
+    <div id="sideMenu" class="side-menu hidden">
+      <div class="side-backdrop" id="menuBackdrop"></div>
+      <div class="side-panel">
+        <button id="menuClose" class="modal-close">✕</button>
+        <h3 class="side-title">Account</h3>
+        <p class="dev-note">🛠 <b>Dev mode</b> — all features are unlocked. Signing in is optional while we build; per-tier limits get switched on later.</p>
+        <div class="menu-row"><span class="menu-k">Signed in</span><span id="userEmail" class="user-email">not signed in</span></div>
+        <span id="ownerViewAs" class="owner-viewas">
+          <label for="viewAsSel">Preview a tier (to test limits)</label>
+          <select id="viewAsSel"></select>
+        </span>
+        <div class="menu-actions">
+          <button id="loginBtn" class="btn-upgrade">Log in / Sign up</button>
+          <button id="upgradeBtn" class="btn-ghost">View plans &amp; pricing</button>
+          <button id="logoutBtn" class="btn-ghost">Log out</button>
+        </div>
+      </div>
+    </div>
 
     <div id="newsTicker" class="news-ticker hidden">
       <span class="news-label">📰 LIVE</span>

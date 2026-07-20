@@ -97,8 +97,16 @@ const TF_LABELS = { "15m": "15 min", "1h": "1 hour", "4h": "4 hour", "1d": "Dail
 const $ = (id) => document.getElementById(id);
 const state = { candles: [], result: null, fundamentals: null };
 
+// DEV MODE: while building, everyone gets full access and login is optional.
+// The tier machinery stays intact — flip this to false to enforce real tiers.
+const DEV_FULL_ACCESS = true;
+
 function currentTier() {
-  return TIERS[auth.effectiveTierId()] || TIERS.free;
+  const u = auth.getUser();
+  if (u) return TIERS[auth.effectiveTierId()] || TIERS.free;
+  // not signed in: dev mode unlocks everything (respecting any "preview tier" pick)
+  if (DEV_FULL_ACCESS) return TIERS[auth.getViewAs() || "pro"] || TIERS.pro;
+  return TIERS.free;
 }
 
 function fmt(v, opts = {}) {
@@ -570,28 +578,37 @@ function buildIntervalOptions(tier) {
 function renderUserBar() {
   const u = auth.getUser();
   const tier = currentTier();
-  $("userEmail").textContent = u ? u.email : "";
+  $("userEmail").textContent = u ? u.email : "not signed in";
+  const dev = !u && DEV_FULL_ACCESS;
   const badge = $("tierBadge");
-  badge.textContent = tier.name.toUpperCase() + (u && u.owner ? " · OWNER" : "");
+  badge.textContent = tier.name.toUpperCase() + (u && u.owner ? " · OWNER" : dev ? " · DEV" : "");
   badge.className = "tier-badge t-" + tier.id;
 
-  // Owner "view as" selector
+  // "Preview tier" selector — available to the owner and in dev mode, for
+  // testing what each plan's gating looks like.
   const ownerBox = $("ownerViewAs");
-  if (u && u.owner) {
+  const canPreview = dev || (u && u.owner);
+  if (canPreview) {
     ownerBox.classList.remove("hidden");
     const sel = $("viewAsSel");
     if (sel.options.length === 0) {
       TIER_ORDER.forEach((id) => {
         const o = document.createElement("option");
         o.value = id;
-        o.textContent = "View as " + TIERS[id].name;
+        o.textContent = "Preview as " + TIERS[id].name;
         sel.appendChild(o);
       });
     }
-    sel.value = auth.effectiveTierId();
+    sel.value = auth.getViewAs() || (u && u.owner ? "pro" : "pro");
   } else {
     ownerBox.classList.add("hidden");
   }
+
+  // login vs logout affordances
+  const loginBtn = $("loginBtn");
+  const logoutBtn = $("logoutBtn");
+  if (loginBtn) loginBtn.classList.toggle("hidden", !!u);
+  if (logoutBtn) logoutBtn.classList.toggle("hidden", !u);
 }
 
 function applyTier() {
@@ -1273,11 +1290,32 @@ window.addEventListener("DOMContentLoaded", () => {
     $("holdingsInput").value = "AAPL 60\nNVDA 40\nMSFT 30\nVOO 25\nSCHD 200\nTSLA 50\nBTC-USD 0.4";
   });
 
-  // header buttons
-  $("upgradeBtn").addEventListener("click", openPricing);
+  // side menu
+  const openMenu = () => $("sideMenu").classList.remove("hidden");
+  const closeMenu = () => $("sideMenu").classList.add("hidden");
+  $("menuBtn").addEventListener("click", () => {
+    renderUserBar();
+    openMenu();
+  });
+  $("menuClose").addEventListener("click", closeMenu);
+  $("menuBackdrop").addEventListener("click", closeMenu);
+  $("loginBtn").addEventListener("click", () => {
+    closeMenu();
+    setAuthMode("signup");
+    showAuth();
+  });
+
+  // account buttons
+  $("upgradeBtn").addEventListener("click", () => {
+    closeMenu();
+    openPricing();
+  });
   $("logoutBtn").addEventListener("click", () => {
     auth.logout();
-    location.reload();
+    auth.setViewAs(null);
+    applyTier();
+    closeMenu();
+    run();
   });
   $("viewAsSel").addEventListener("change", (e) => {
     auth.setViewAs(e.target.value);
@@ -1289,21 +1327,19 @@ window.addEventListener("DOMContentLoaded", () => {
     if (e.target.id === "pricingModal") closePricing();
   });
 
-  // auth form
+  // auth form (optional)
   $("authForm").addEventListener("submit", submitAuth);
+  $("authClose").addEventListener("click", hideAuth);
+  $("authSkip").addEventListener("click", hideAuth);
   setAuthMode("signup");
 
   // expose a couple handlers for inline onclicks
   window.__openPricing = openPricing;
   window.__choosePlan = choosePlan;
 
-  // gate: logged in?
-  if (auth.getUser()) {
-    hideAuth();
-    applyTier();
-    run();
-    initNews();
-  } else {
-    showAuth();
-  }
+  // No login gate in dev mode — go straight into the app with full access.
+  hideAuth();
+  applyTier();
+  run();
+  initNews();
 });

@@ -385,3 +385,28 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 #doctorResults .pf-stat .n.sell { color: var(--sell); }
 #doctorIdeas { margin-top: 8px; }
 #doctorIdeas h2 { font-size: 15px; margin: 0 0 4px; }
+
+/* ===== Side menu drawer ===== */
+.side-menu { position: fixed; inset: 0; z-index: 70; }
+.side-backdrop { position: absolute; inset: 0; background: rgba(6,9,14,0.6); }
+.side-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; max-width: 88vw;
+  background: var(--panel); border-left: 1px solid var(--border); padding: 22px; overflow-y: auto;
+  box-shadow: -12px 0 40px rgba(0,0,0,0.4); }
+.side-title { margin: 0 0 12px; font-size: 18px; }
+.dev-note { background: rgba(76,154,255,0.08); border: 1px solid rgba(76,154,255,0.25); color: #a9c6f2;
+  border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55; margin: 0 0 16px; }
+.menu-row { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.menu-k { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+.owner-viewas { display: block; margin: 16px 0; }
+.owner-viewas label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px; }
+.owner-viewas select { width: 100%; }
+.menu-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.menu-actions button { width: 100%; }
+
+/* auth overlay tweaks */
+.auth-card { position: relative; }
+.auth-skip { display: block; width: 100%; margin-top: 14px; background: transparent; border: 1px solid var(--border);
+  color: var(--muted); padding: 10px; border-radius: 9px; cursor: pointer; font-size: 13px; }
+.auth-skip:hover { color: var(--text); border-color: var(--muted); }
