@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SignalDesk — Technical & Fundamental Trading Signals</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- ===== Auth overlay (optional — opened from the side menu) ===== -->
+  <div id="authOverlay" class="auth-overlay hidden">
+    <div class="auth-card">
+      <button id="authClose" class="modal-close">✕</button>
+      <div class="auth-brand"><span class="spark">▲</span> SignalDesk</div>
+      <h2 id="authTitle">Create your account</h2>
+      <form id="authForm" data-mode="signup">
+        <input id="authEmail" type="email" placeholder="you@email.com" autocomplete="email" required />
+        <input id="authPass" type="password" placeholder="Password (min 4 chars)" autocomplete="current-password" required />
+        <div id="authError" class="auth-error"></div>
+        <button id="authSubmit" type="submit">Sign up — free</button>
+      </form>
+      <div id="authToggle" class="auth-toggle"></div>
+      <button id="authSkip" class="auth-skip">Continue without signing in →</button>
+      <p class="auth-fine">Demo accounts are stored only in this browser. No email is sent, no card required.</p>
+    </div>
+  </div>
+
+  <!-- ===== App ===== -->
+  <div id="appRoot" class="hidden">
+    <header>
+      <div>
+        <h1><span class="spark">▲</span> SignalDesk</h1>
+        <div class="sub">Signals · any asset · income &amp; growth · paper trading</div>
+      </div>
+      <div class="userbar">
+        <span id="tierBadge" class="tier-badge t-pro">PRO</span>
+        <button id="menuBtn" class="btn-ghost">☰ Account</button>
+      </div>
+    </header>
+
+    <!-- ===== Side menu (account / tiers — optional in dev mode) ===== -->
+    <div id="sideMenu" class="side-menu hidden">
+      <div class="side-backdrop" id="menuBackdrop"></div>
+      <div class="side-panel">
+        <button id="menuClose" class="modal-close">✕</button>
+        <h3 class="side-title">Account</h3>
+        <p class="dev-note">🛠 <b>Dev mode</b> — all features are unlocked. Signing in is optional while we build; per-tier limits get switched on later.</p>
+        <div class="menu-row"><span class="menu-k">Signed in</span><span id="userEmail" class="user-email">not signed in</span></div>
+        <span id="ownerViewAs" class="owner-viewas">
+          <label for="viewAsSel">Preview a tier (to test limits)</label>
+          <select id="viewAsSel"></select>
+        </span>
+        <div class="menu-actions">
+          <button id="loginBtn" class="btn-upgrade">Log in / Sign up</button>
+          <button id="upgradeBtn" class="btn-ghost">View plans &amp; pricing</button>
+          <button id="logoutBtn" class="btn-ghost">Log out</button>
+        </div>
+
+        <div class="menu-fund">
+          <label for="fmpKeyInput">Fundamentals data (for Business Quality &amp; Value)</label>
+          <p class="menu-fund-note">Optional. Paste a <b>free</b> Financial Modeling Prep API key to enable
+            company profitability, margins, competition &amp; valuation scoring.
+            <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">Get a free key →</a></p>
+          <div class="fund-key-row">
+            <input id="fmpKeyInput" type="password" placeholder="API key" autocomplete="off" spellcheck="false" />
+            <button id="saveKeyBtn" class="btn-ghost">Save</button>
+          </div>
+          <div id="fmpKeyMsg" class="fund-key-msg"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="newsTicker" class="news-ticker hidden">
+      <span class="news-label">LIVE</span>
+      <div class="news-track-wrap" id="newsTrackWrap"><div id="newsTrack" class="news-track"></div></div>
+    </div>
+
+    <div class="wrap">
+      <div class="tabsbar">
+      <nav class="tabs">
+        <button class="tab active" data-tab="analyze">📊 Analyze</button>
+        <button class="tab" data-tab="screener" id="tabScreenerBtn">💰 Income &amp; Growth</button>
+        <button class="tab" data-tab="paper" id="tabPaperBtn">🎮 Paper Trading</button>
+        <button class="tab" data-tab="doctor" id="tabDoctorBtn">🩺 Portfolio Doctor</button>
+        <button class="tab" data-tab="ranker" id="tabRankerBtn">🏆 Stock Ranker</button>
+      </nav>
+      </div>
+
+      <!-- ============ ANALYZE ============ -->
+      <section id="tab-analyze" class="tabview">
+        <div id="demoBanner" class="demo-banner hidden">
+          ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source right now.
+        </div>
+
+        <div class="controls">
+          <div class="field">
+            <label for="preset">Quick pick</label>
+            <select id="preset"></select>
+          </div>
+          <div class="field search-field">
+            <label for="symbol">Search or enter symbol</label>
+            <input id="symbol" value="BTCUSDT" spellcheck="false" autocomplete="off" placeholder="e.g. Apple, TSLA, gold…" />
+            <div id="searchResults" class="search-results hidden"></div>
+          </div>
+          <div class="field">
+            <label for="interval">Timeframe</label>
+            <select id="interval"></select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button id="analyzeBtn">Analyze</button>
+          </div>
+        </div>
+        <div class="examples">
+          Search any name or ticker — stocks, ETFs, funds, crypto, forex, commodities. Try
+          <code>AAPL</code> <code>SCHD</code> <code>VOO</code> <code>BTCUSDT</code> <code>EURUSD=X</code> <code>GC=F</code>.
+        </div>
+
+        <div id="status" class="status">Loading…</div>
+
+        <div id="results" class="hidden">
+          <div class="grid">
+            <div class="card verdict-card">
+              <h2>Signal</h2>
+              <div id="verdict" class="verdict hold">—</div>
+              <div class="verdict-stats">
+                <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
+                <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
+                <div><div id="priceVal" class="n">$0</div><div class="l">Last price</div></div>
+              </div>
+              <div>
+                <div class="gauge"><div id="gaugeFill" class="fill" style="width:50%"></div></div>
+                <div class="gauge-labels"><span>Strong Sell</span><span>Neutral</span><span>Strong Buy</span></div>
+              </div>
+            </div>
+
+            <div class="card" id="planCard">
+              <h2>Suggested trade plan (ATR-based)</h2>
+              <div id="plan"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="plainEnglishCard">
+              <h2>📖 Plain-English summary</h2>
+              <p id="plainEnglish" class="plain-english"></p>
+            </div>
+
+            <div class="card chart-card">
+              <div class="chart-head">
+                <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+                <div class="chart-tools">
+                  <div class="tf-group" id="chartTf"></div>
+                  <div class="tf-group" id="chartType">
+                    <button class="ct-btn" data-ct="candles" title="Candles">📊</button>
+                    <button class="ct-btn" data-ct="line" title="Line">📈</button>
+                    <button class="ct-btn" data-ct="area" title="Area">🏔️</button>
+                  </div>
+                  <div class="zoom-group">
+                    <button data-z="out" title="Zoom out">−</button>
+                    <button data-z="in" title="Zoom in">+</button>
+                    <button data-z="reset" title="Reset view">⤢</button>
+                  </div>
+                </div>
+              </div>
+              <canvas id="chart"></canvas>
+              <div class="chart-hint">Scroll or pinch to zoom · drag to pan · use timeframe buttons to change interval</div>
+            </div>
+
+            <div class="card">
+              <h2>Indicator snapshot</h2>
+              <div id="snapshot" class="metrics"></div>
+            </div>
+
+            <div class="card" id="fundamentals">
+              <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
+              <div id="fundMetrics" class="metrics"></div>
+              <ul id="fundReasons" class="fund-reasons"></ul>
+            </div>
+
+            <div class="card chart-card">
+              <h2>Why — weighted indicator breakdown</h2>
+              <div id="breakdown"></div>
+              <div id="adxNote" class="adx-note"></div>
+              <div id="blendNote" class="blend-note"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="valueCard">
+              <h2>🏛️ Business quality &amp; value</h2>
+              <div id="valueContent"></div>
+            </div>
+          </div>
+
+          <div class="disclaimer">
+            <strong>Not financial advice.</strong> SignalDesk is an educational tool. It computes well-known
+            indicators mechanically — it does <em>not</em> predict the future, and no setup produces guaranteed wins.
+            Signals can and will be wrong. Always use a stop-loss and do your own research.
+          </div>
+          <div class="backend-note">
+            💡 <b>For monetization:</b> the sign-in and plans are a working front-end demo. Real, enforceable
+            subscriptions need a small backend (auth + a payment provider like Stripe). The code is structured to
+            plug into that when you're ready.
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ INCOME & GROWTH ============ -->
+      <section id="tab-screener" class="tabview hidden">
+        <p class="section-intro">Curated watchlists for income and long-term growth. Click any holding to run a full
+          signal analysis. <b>Yields and fees are approximate</b> — verify current figures before investing.</p>
+        <div id="screenerContent"></div>
+      </section>
+
+      <!-- ============ PAPER TRADING ============ -->
+      <section id="tab-paper" class="tabview hidden">
+        <p class="section-intro">Practice with <b>$100,000 of simulated cash</b>, trading at real live prices. No real
+          money, no real orders — just a sandbox to test ideas.</p>
+
+        <div class="pf-summary">
+          <div class="pf-stat"><div class="l">Total value</div><div id="pfTotal" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Cash</div><div id="pfCash" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Holdings</div><div id="pfHoldings" class="n">—</div></div>
+          <div class="pf-stat"><div class="l">Total P&amp;L</div><div id="pfPnl" class="n">—</div></div>
+        </div>
+
+        <div class="card chart-card">
+          <h2>Portfolio performance</h2>
+          <canvas id="pfChart"></canvas>
+        </div>
+
+        <div class="card trade-card">
+          <h2>Place a simulated order</h2>
+          <div class="trade-form">
+            <div class="field"><label for="tradeSymbol">Symbol</label><input id="tradeSymbol" placeholder="AAPL" autocomplete="off" /></div>
+            <div class="field"><label for="tradeQty">Quantity</label><input id="tradeQty" type="number" min="0" step="any" placeholder="10" /></div>
+            <div class="field"><label>Live price</label><div id="tradePrice" class="trade-price">—</div></div>
+            <div class="field"><label>&nbsp;</label><button id="quoteBtn" class="btn-ghost">Get price</button></div>
+            <div class="field"><label>&nbsp;</label><button id="tradeBuy" class="btn-buy">Buy</button></div>
+            <div class="field"><label>&nbsp;</label><button id="tradeSell" class="btn-sell">Sell</button></div>
+          </div>
+          <div id="tradeMsg" class="trade-msg"></div>
+        </div>
+
+        <div class="card">
+          <div class="pf-head"><h2>Positions</h2>
+            <span><button id="refreshPaper" class="btn-ghost">↻ Refresh prices</button>
+            <button id="resetPaper" class="btn-ghost">Reset portfolio</button></span>
+          </div>
+          <div class="table-wrap">
+            <table class="pf-table">
+              <thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Price</th><th>Value</th><th>P&amp;L</th><th></th></tr></thead>
+              <tbody id="positionsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Trade history</h2>
+          <div class="table-wrap">
+            <table class="pf-table">
+              <thead><tr><th>Time</th><th>Side</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Value</th></tr></thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PORTFOLIO DOCTOR ============ -->
+      <section id="tab-doctor" class="tabview hidden">
+        <p class="section-intro">Paste your real holdings (or upload a broker CSV) and get a <b>Keep / Trim / Add</b>
+          read on each position, plus diversification and concentration checks. It analyzes every holding at live
+          prices with the same signal engine. <b>Educational only — not financial advice.</b></p>
+
+        <div class="card">
+          <h2>Your holdings</h2>
+          <textarea id="holdingsInput" class="holdings-input" spellcheck="false" placeholder="One per line — ticker then optional shares or value. Examples:
+AAPL 50
+VOO 1200
+SCHD, 400
+BTC-USD 0.5
+
+…or paste a broker CSV with Symbol / Quantity / Market Value columns."></textarea>
+          <div class="doctor-actions">
+            <label class="btn-ghost file-btn">Upload CSV<input type="file" id="csvFile" accept=".csv,.txt" hidden /></label>
+            <button id="loadSampleBtn" class="btn-ghost">Load sample</button>
+            <button id="runDoctor" class="btn-buy">Analyze my portfolio</button>
+          </div>
+        </div>
+
+        <div id="doctorResults"></div>
+        <div id="doctorIdeas"></div>
+      </section>
+
+      <!-- ============ STOCK RANKER ============ -->
+      <section id="tab-ranker" class="tabview hidden">
+        <p class="section-intro">A ranked <b>quality board</b> across a universe of large-cap stocks — each scored on
+          Profit, Moat, Survival, Stability and Value, averaged into an overall score &amp; letter grade. Unlike other
+          screeners, every row also shows our <b>live technical Signal</b> and a concrete <b>Fair-Value price</b>.
+          Click any row to open the full analysis. Results are cached for 12 hours.</p>
+        <div class="ranker-toolbar">
+          <input id="rankerSearch" placeholder="Filter by ticker / company / sector…" autocomplete="off" />
+          <span id="rankerAsOf" class="ranker-asof"></span>
+          <button id="rankerRefresh" class="btn-ghost">↻ Refresh</button>
+        </div>
+        <div class="ranker-filters">
+          <select id="fltGrade">
+            <option value="0">Grade: any</option>
+            <option value="58">C+ &amp; up</option>
+            <option value="66">B &amp; up</option>
+            <option value="74">B+ &amp; up</option>
+            <option value="82">A &amp; up</option>
+          </select>
+          <select id="fltSignal">
+            <option value="any">Signal: any</option>
+            <option value="buy">BUY or better</option>
+            <option value="strong">STRONG BUY only</option>
+            <option value="notsell">Not SELL</option>
+          </select>
+          <select id="fltValue">
+            <option value="any">Valuation: any</option>
+            <option value="under">Undervalued</option>
+            <option value="fairbetter">Fair or cheaper</option>
+          </select>
+          <select id="fltSector"><option value="">Sector: all</option></select>
+        </div>
+        <div class="ranker-universe">
+          <input id="uniAdd" placeholder="Add your tickers (e.g. COIN, PLTR, ASML)" autocomplete="off" />
+          <button id="uniAddBtn" class="btn-ghost">Add</button>
+          <span id="uniChips" class="uni-chips"></span>
+        </div>
+        <div id="rankerContent"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ===== Pricing modal ===== -->
+  <div id="pricingModal" class="modal hidden">
+    <div class="modal-inner">
+      <button id="closePricing" class="modal-close">✕</button>
+      <h2 class="modal-title">Choose your plan</h2>
+      <p class="modal-sub">More analysis and clearer signals as you go up. (Demo — no real charge.)</p>
+      <div id="pricingGrid" class="pricing-grid"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
