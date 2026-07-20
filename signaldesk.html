@@ -594,6 +594,12 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .chart-hint { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: center; }
 #chart { touch-action: none; }
 
+/* ===== Chart type toggle ===== */
+#chartType .ct-btn { background: transparent; border: none; font-size: 14px; padding: 5px 9px; border-radius: 7px;
+  cursor: pointer; filter: grayscale(0.4) opacity(0.6); }
+#chartType .ct-btn:hover { filter: none; background: rgba(255,255,255,0.05); }
+#chartType .ct-btn.active { filter: none; background: linear-gradient(180deg,#21324c,#17233a); box-shadow: 0 0 0 1px rgba(76,154,255,0.35); }
+
 </style>
 </head>
 <body>
@@ -739,6 +745,11 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
                 <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
                 <div class="chart-tools">
                   <div class="tf-group" id="chartTf"></div>
+                  <div class="tf-group" id="chartType">
+                    <button class="ct-btn" data-ct="candles" title="Candles">📊</button>
+                    <button class="ct-btn" data-ct="line" title="Line">📈</button>
+                    <button class="ct-btn" data-ct="area" title="Area">🏔️</button>
+                  </div>
                   <div class="zoom-group">
                     <button data-z="out" title="Zoom out">−</button>
                     <button data-z="in" title="Zoom in">+</button>
@@ -3584,9 +3595,26 @@ function gaugeColor(score) {
 }
 
 // ---------------- Chart (unchanged core) ----------------
-// ---- Chart zoom / pan state ----
+// ---- Chart zoom / pan / hover / type state ----
 const CHART_DEFAULT = 140;
 const chartView = { count: CHART_DEFAULT, offset: 0 };
+let chartType = (() => { try { return localStorage.getItem("signaldesk_charttype") || "candles"; } catch { return "candles"; } })();
+const chartHover = { x: null, y: null };
+let hoverRaf = null;
+function scheduleHoverRedraw() {
+  if (hoverRaf) return;
+  hoverRaf = requestAnimationFrame(() => { hoverRaf = null; redrawChart(); });
+}
+function roundRect(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 function resetChartView(len) {
   chartView.count = Math.min(CHART_DEFAULT, len || CHART_DEFAULT);
   chartView.offset = 0;
@@ -3637,8 +3665,11 @@ function wireChartInteractions() {
     try { cv.setPointerCapture(e.pointerId); } catch {}
   });
   cv.addEventListener("pointermove", (e) => {
-    if (!state.result || !pts.has(e.pointerId)) return;
-    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!state.result) return;
+    const rect = cv.getBoundingClientRect();
+    chartHover.x = e.clientX - rect.left;
+    chartHover.y = e.clientY - rect.top;
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size >= 2) {
       const [a, b] = [...pts.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -3647,16 +3678,20 @@ function wireChartInteractions() {
     } else if (panning) {
       const dx = e.clientX - lastX;
       lastX = e.clientX;
-      chartPanPixels(dx);
+      chartPanPixels(dx); // this redraws (crosshair included)
+    } else {
+      scheduleHoverRedraw();
     }
   });
   const rm = (e) => {
     pts.delete(e.pointerId);
     if (pts.size < 2) pinchDist = 0;
     if (pts.size === 0) { panning = false; cv.style.cursor = "grab"; }
+    if (e.pointerType === "touch") { chartHover.x = null; scheduleHoverRedraw(); }
   };
   cv.addEventListener("pointerup", rm);
   cv.addEventListener("pointercancel", rm);
+  cv.addEventListener("pointerleave", () => { chartHover.x = null; scheduleHoverRedraw(); });
   cv.style.cursor = "grab";
 }
 
@@ -3711,20 +3746,55 @@ function drawChart(candles, ind) {
     ctx.fillText(fmt(p), cssW - padR + 4, yy);
   }
 
-  const cw = Math.max(1.5, ((cssW - padL - padR) / view.length) * 0.62);
+  const bw0 = (cssW - padL - padR) / view.length;
+
+  // volume overlay — bottom ~16% of the price panel, behind the price series
+  const volAreaTop = priceH - 8 - (priceH - 16) * 0.16;
+  const volMax = Math.max(...view.map((c) => c.volume || 0)) || 1;
   for (let i = 0; i < view.length; i++) {
     const c = view[i];
     const up = c.close >= c.open;
-    ctx.strokeStyle = up ? "#16c784" : "#e23744";
-    ctx.fillStyle = up ? "#16c784" : "#e23744";
-    const xi = x(i);
+    const vh = ((c.volume || 0) / volMax) * (priceH - 8 - volAreaTop);
+    ctx.fillStyle = up ? "rgba(22,199,132,0.22)" : "rgba(226,55,68,0.22)";
+    ctx.fillRect(x(i) - bw0 * 0.3, priceH - 8 - vh, bw0 * 0.6, vh);
+  }
+
+  // price series — candles / line / area
+  if (chartType === "candles") {
+    const cw = Math.max(1.5, bw0 * 0.62);
+    for (let i = 0; i < view.length; i++) {
+      const c = view[i];
+      const up = c.close >= c.open;
+      ctx.strokeStyle = up ? "#16c784" : "#e23744";
+      ctx.fillStyle = up ? "#16c784" : "#e23744";
+      const xi = x(i);
+      ctx.beginPath();
+      ctx.moveTo(xi, y(c.high));
+      ctx.lineTo(xi, y(c.low));
+      ctx.stroke();
+      const yo = y(c.open);
+      const yc = y(c.close);
+      ctx.fillRect(xi - cw / 2, Math.min(yo, yc), cw, Math.max(1, Math.abs(yc - yo)));
+    }
+  } else {
+    const pts = view.map((c, i) => [x(i), y(c.close)]);
+    if (chartType === "area") {
+      const grad = ctx.createLinearGradient(0, 8, 0, priceH);
+      grad.addColorStop(0, "rgba(76,154,255,0.35)");
+      grad.addColorStop(1, "rgba(76,154,255,0)");
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], priceH - 8);
+      pts.forEach(([px, py]) => ctx.lineTo(px, py));
+      ctx.lineTo(pts[pts.length - 1][0], priceH - 8);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
     ctx.beginPath();
-    ctx.moveTo(xi, y(c.high));
-    ctx.lineTo(xi, y(c.low));
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.strokeStyle = "#4c9aff";
+    ctx.lineWidth = 1.8;
     ctx.stroke();
-    const yo = y(c.open);
-    const yc = y(c.close);
-    ctx.fillRect(xi - cw / 2, Math.min(yo, yc), cw, Math.max(1, Math.abs(yc - yo)));
   }
 
   const overlay = (arr, color) => {
@@ -3790,6 +3860,52 @@ function drawChart(candles, ind) {
     } else ctx.lineTo(px, py);
   }
   ctx.stroke();
+
+  // ---- crosshair + hover readout ----
+  if (chartHover.x != null && view.length > 1) {
+    const plotW = cssW - padL - padR;
+    let idx = Math.round(((chartHover.x - padL) / plotW) * (view.length - 1));
+    idx = Math.max(0, Math.min(idx, view.length - 1));
+    const c = view[idx];
+    const hx = x(idx);
+    const hy = Math.max(8, Math.min(chartHover.y, priceH - 8));
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, 8); ctx.lineTo(hx, priceH - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, hy); ctx.lineTo(cssW - padR, hy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(hx, y(c.close), 2.6, 0, Math.PI * 2); ctx.fill();
+    // price tag on the right axis at cursor height
+    const pAtY = min + (1 - (hy - 8) / (priceH - 16)) * (max - min);
+    ctx.fillStyle = "rgba(76,154,255,0.92)";
+    ctx.fillRect(cssW - padR + 1, hy - 8, padR - 2, 16);
+    ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.font = "10px ui-monospace, monospace"; ctx.textBaseline = "middle";
+    ctx.fillText(fmt(pAtY), cssW - padR + 4, hy);
+    // OHLC tooltip
+    const rsiV = ind.rsi[offset + idx];
+    const chg = c.open ? ((c.close - c.open) / c.open) * 100 : 0;
+    const lines = [
+      new Date(c.time).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+      `O ${fmt(c.open)}   H ${fmt(c.high)}`,
+      `L ${fmt(c.low)}   C ${fmt(c.close)}`,
+      `Chg ${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%${rsiV != null ? `   RSI ${rsiV.toFixed(0)}` : ""}`,
+    ];
+    ctx.font = "11px ui-monospace, monospace"; ctx.textBaseline = "top";
+    const tw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 16;
+    const th = lines.length * 15 + 10;
+    let tx = hx + 14; if (tx + tw > cssW - padR) tx = hx - tw - 14; if (tx < padL) tx = padL;
+    const ty = 10;
+    ctx.fillStyle = "rgba(13,18,26,0.94)"; ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1;
+    roundRect(ctx, tx, ty, tw, th, 7); ctx.fill(); ctx.stroke();
+    ctx.textAlign = "left";
+    lines.forEach((l, i) => {
+      ctx.fillStyle = i === 0 ? "#fff" : i === 3 ? (chg >= 0 ? "#4cd3a5" : "#ef8e97") : "rgba(230,235,242,0.85)";
+      ctx.fillText(l, tx + 8, ty + 6 + i * 15);
+    });
+    ctx.textBaseline = "middle";
+  }
 }
 
 // ---------------- Controls / tier UI ----------------
@@ -4912,6 +5028,18 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     })
   );
+  // chart type toggle
+  const syncChartType = () =>
+    document.querySelectorAll("#chartType .ct-btn").forEach((b) => b.classList.toggle("active", b.dataset.ct === chartType));
+  document.querySelectorAll("#chartType .ct-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      chartType = b.dataset.ct;
+      try { localStorage.setItem("signaldesk_charttype", chartType); } catch {}
+      syncChartType();
+      redrawChart();
+    })
+  );
+  syncChartType();
 
   // paper trading controls
   $("quoteBtn").addEventListener("click", doQuote);

@@ -586,3 +586,9 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .zoom-group button:hover { border-color: var(--accent); color: var(--accent); }
 .chart-hint { font-size: 11px; color: var(--muted); margin-top: 8px; text-align: center; }
 #chart { touch-action: none; }
+
+/* ===== Chart type toggle ===== */
+#chartType .ct-btn { background: transparent; border: none; font-size: 14px; padding: 5px 9px; border-radius: 7px;
+  cursor: pointer; filter: grayscale(0.4) opacity(0.6); }
+#chartType .ct-btn:hover { filter: none; background: rgba(255,255,255,0.05); }
+#chartType .ct-btn.active { filter: none; background: linear-gradient(180deg,#21324c,#17233a); box-shadow: 0 0 0 1px rgba(76,154,255,0.35); }
