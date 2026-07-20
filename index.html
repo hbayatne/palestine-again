@@ -76,6 +76,7 @@
     </div>
 
     <div class="wrap">
+      <div class="tabsbar">
       <nav class="tabs">
         <button class="tab active" data-tab="analyze">📊 Analyze</button>
         <button class="tab" data-tab="screener" id="tabScreenerBtn">💰 Income &amp; Growth</button>
@@ -83,6 +84,7 @@
         <button class="tab" data-tab="doctor" id="tabDoctorBtn">🩺 Portfolio Doctor</button>
         <button class="tab" data-tab="ranker" id="tabRankerBtn">🏆 Stock Ranker</button>
       </nav>
+      </div>
 
       <!-- ============ ANALYZE ============ -->
       <section id="tab-analyze" class="tabview">
@@ -143,8 +145,19 @@
             </div>
 
             <div class="card chart-card">
-              <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+              <div class="chart-head">
+                <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
+                <div class="chart-tools">
+                  <div class="tf-group" id="chartTf"></div>
+                  <div class="zoom-group">
+                    <button data-z="out" title="Zoom out">−</button>
+                    <button data-z="in" title="Zoom in">+</button>
+                    <button data-z="reset" title="Reset view">⤢</button>
+                  </div>
+                </div>
+              </div>
               <canvas id="chart"></canvas>
+              <div class="chart-hint">Scroll or pinch to zoom · drag to pan · use timeframe buttons to change interval</div>
             </div>
 
             <div class="card">

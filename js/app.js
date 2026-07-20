@@ -175,6 +175,7 @@ async function run() {
     console.warn("Live fetch failed, using synthetic:", err);
   }
   state.candles = candles;
+  resetChartView(candles.length);
 
   // Fundamentals — Pro only, crypto only (has a CoinGecko id).
   let fundScore = null;
@@ -435,6 +436,7 @@ function render(r, symbol, tier) {
     fundWrap.classList.add("hidden");
   }
 
+  buildChartTf(tier);
   scheduleChart(state.candles, r.indicators);
 }
 
@@ -606,6 +608,82 @@ function gaugeColor(score) {
 }
 
 // ---------------- Chart (unchanged core) ----------------
+// ---- Chart zoom / pan state ----
+const CHART_DEFAULT = 140;
+const chartView = { count: CHART_DEFAULT, offset: 0 };
+function resetChartView(len) {
+  chartView.count = Math.min(CHART_DEFAULT, len || CHART_DEFAULT);
+  chartView.offset = 0;
+}
+function redrawChart() {
+  if (state.result) {
+    try {
+      drawChart(state.candles, state.result.indicators);
+    } catch (e) {
+      console.error("chart redraw failed:", e);
+    }
+  }
+}
+function chartZoom(factor) {
+  if (!state.candles.length) return;
+  const total = state.candles.length;
+  const center = total - chartView.offset - chartView.count / 2; // keep view centered
+  const nc = Math.max(20, Math.min(Math.round(chartView.count * factor), total));
+  chartView.count = nc;
+  chartView.offset = Math.max(0, Math.min(Math.round(total - center - nc / 2), total - nc));
+  redrawChart();
+}
+function chartPanPixels(dx) {
+  if (!state.candles.length) return;
+  const cw = Math.max(50, $("chart").clientWidth - 66);
+  const perPx = chartView.count / cw;
+  const total = state.candles.length;
+  chartView.offset = Math.max(0, Math.min(Math.round(chartView.offset + dx * perPx), total - chartView.count));
+  redrawChart();
+}
+function wireChartInteractions() {
+  const cv = $("chart");
+  if (!cv || cv.dataset.wired) return;
+  cv.dataset.wired = "1";
+  cv.addEventListener("wheel", (e) => {
+    if (!state.result) return;
+    e.preventDefault();
+    chartZoom(e.deltaY < 0 ? 0.85 : 1.18);
+  }, { passive: false });
+  const pts = new Map();
+  let pinchDist = 0;
+  let panning = false;
+  let lastX = 0;
+  cv.addEventListener("pointerdown", (e) => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) { panning = true; lastX = e.clientX; cv.style.cursor = "grabbing"; }
+    else { panning = false; pinchDist = 0; }
+    try { cv.setPointerCapture(e.pointerId); } catch {}
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!state.result || !pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size >= 2) {
+      const [a, b] = [...pts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinchDist > 0 && d > 0) chartZoom(pinchDist / d);
+      pinchDist = d;
+    } else if (panning) {
+      const dx = e.clientX - lastX;
+      lastX = e.clientX;
+      chartPanPixels(dx);
+    }
+  });
+  const rm = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinchDist = 0;
+    if (pts.size === 0) { panning = false; cv.style.cursor = "grab"; }
+  };
+  cv.addEventListener("pointerup", rm);
+  cv.addEventListener("pointercancel", rm);
+  cv.style.cursor = "grab";
+}
+
 function drawChart(candles, ind) {
   const canvas = $("chart");
   const dpr = window.devicePixelRatio || 1;
@@ -617,8 +695,15 @@ function drawChart(candles, ind) {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, cssW, cssH);
 
-  const view = candles.slice(-140);
-  const offset = candles.length - view.length;
+  // Windowed view for zoom/pan: count = candles shown, offset = bars back from end.
+  const total = candles.length;
+  let count = Math.max(20, Math.min(Math.round(chartView.count), total));
+  let off = Math.max(0, Math.min(Math.round(chartView.offset), total - count));
+  chartView.count = count;
+  chartView.offset = off;
+  const endIdx = total - off;
+  const view = candles.slice(endIdx - count, endIdx);
+  const offset = endIdx - count;
   const padL = 8;
   const padR = 58;
   const priceH = cssH * 0.72;
@@ -746,6 +831,22 @@ function buildPresetOptions() {
     }
     sel.appendChild(og);
   }
+}
+
+// Quick timeframe buttons under the chart (mirror the dropdown, respect tier).
+function buildChartTf(tier) {
+  const box = $("chartTf");
+  if (!box) return;
+  const cur = $("interval").value;
+  box.innerHTML = tier.timeframes
+    .map((tf) => `<button class="tf-btn${tf === cur ? " active" : ""}" data-tf="${tf}">${TF_LABELS[tf] || tf}</button>`)
+    .join("");
+  box.querySelectorAll(".tf-btn").forEach((b) => {
+    b.onclick = () => {
+      $("interval").value = b.dataset.tf;
+      run();
+    };
+  });
 }
 
 function buildIntervalOptions(tier) {
@@ -1820,6 +1921,20 @@ window.addEventListener("DOMContentLoaded", () => {
   // tabs
   document.querySelectorAll(".tab").forEach((b) =>
     b.addEventListener("click", () => switchTab(b.dataset.tab))
+  );
+
+  // chart zoom / pan
+  wireChartInteractions();
+  document.querySelectorAll(".zoom-group button").forEach((b) =>
+    b.addEventListener("click", () => {
+      const z = b.dataset.z;
+      if (z === "in") chartZoom(0.8);
+      else if (z === "out") chartZoom(1.25);
+      else {
+        resetChartView(state.candles.length);
+        redrawChart();
+      }
+    })
   );
 
   // paper trading controls
