@@ -494,10 +494,76 @@ async function loadNews() {
     }
   };
   build();
-  build();
-  const seconds = Math.max(30, items.length * 5);
-  track.style.animationDuration = seconds + "s";
+  build(); // duplicate for a seamless wrap-around loop
   ticker.classList.remove("hidden");
+  startNewsAutoScroll();
+}
+
+// Slow, readable auto-scroll you can grab and hold. Pauses on hover, wheel,
+// touch, or drag; resumes shortly after you let go.
+let newsRAF = null;
+let newsPaused = false;
+let newsResumeTimer = null;
+let newsWired = false;
+function pauseNews() {
+  newsPaused = true;
+  clearTimeout(newsResumeTimer);
+}
+function resumeNewsSoon(ms = 2200) {
+  clearTimeout(newsResumeTimer);
+  newsResumeTimer = setTimeout(() => (newsPaused = false), ms);
+}
+function wireNewsInteractions(wrap) {
+  if (newsWired) return;
+  newsWired = true;
+  wrap.addEventListener("mouseenter", pauseNews);
+  wrap.addEventListener("mouseleave", () => resumeNewsSoon(500));
+  wrap.addEventListener("wheel", () => { pauseNews(); resumeNewsSoon(); }, { passive: true });
+  wrap.addEventListener("touchstart", pauseNews, { passive: true });
+  wrap.addEventListener("touchmove", pauseNews, { passive: true });
+  wrap.addEventListener("touchend", () => resumeNewsSoon(), { passive: true });
+  // click-drag to scroll (desktop); suppresses the link click only if dragged
+  let dragging = false, startX = 0, startScroll = 0, moved = 0;
+  wrap.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    dragging = true; moved = 0; startX = e.clientX; startScroll = wrap.scrollLeft;
+    pauseNews(); wrap.classList.add("grabbing");
+  });
+  wrap.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    moved = Math.max(moved, Math.abs(dx));
+    wrap.scrollLeft = startScroll - dx;
+  });
+  const endDrag = () => { if (dragging) { dragging = false; wrap.classList.remove("grabbing"); resumeNewsSoon(); } };
+  wrap.addEventListener("pointerup", endDrag);
+  wrap.addEventListener("pointercancel", endDrag);
+  wrap.addEventListener("pointerleave", endDrag);
+  wrap.addEventListener("click", (e) => { if (moved > 6) { e.preventDefault(); e.stopPropagation(); } }, true);
+}
+let newsPos = 0;
+function startNewsAutoScroll() {
+  const wrap = $("newsTrackWrap");
+  const track = $("newsTrack");
+  if (!wrap || !track) return;
+  wireNewsInteractions(wrap);
+  if (newsRAF) cancelAnimationFrame(newsRAF);
+  newsPos = wrap.scrollLeft;
+  const speed = 0.4; // px/frame ≈ 24px/s — slow and easy to read
+  const step = () => {
+    if (newsPaused) {
+      // stay in sync with whatever the user manually scrolled to
+      newsPos = wrap.scrollLeft;
+    } else if (document.visibilityState === "visible") {
+      // accumulate in a float (scrollLeft snaps to int, so sub-pixel would stall)
+      const half = track.scrollWidth / 2;
+      newsPos += speed;
+      if (half > 0 && newsPos >= half) newsPos -= half;
+      wrap.scrollLeft = newsPos;
+    }
+    newsRAF = requestAnimationFrame(step);
+  };
+  newsRAF = requestAnimationFrame(step);
 }
 
 function upsell(msg) {
