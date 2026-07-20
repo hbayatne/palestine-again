@@ -600,6 +600,29 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 #chartType .ct-btn:hover { filter: none; background: rgba(255,255,255,0.05); }
 #chartType .ct-btn.active { filter: none; background: linear-gradient(180deg,#21324c,#17233a); box-shadow: 0 0 0 1px rgba(76,154,255,0.35); }
 
+/* ===== Portfolio Doctor export ===== */
+.doctor-export { display: flex; gap: 8px; margin: 4px 0 10px; flex-wrap: wrap; }
+.report-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.report-brand { font-weight: 800; font-size: 16px; }
+.report-brand .spark { color: var(--accent); }
+.report-date { font-size: 12px; color: var(--muted); }
+#doctorReport { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+@media print {
+  body.printing-doctor * { visibility: hidden !important; }
+  body.printing-doctor #doctorReport,
+  body.printing-doctor #doctorReport * { visibility: visible !important; }
+  body.printing-doctor #doctorReport { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+  body.printing-doctor .doctor-export { display: none !important; }
+}
+
+/* ===== Key test / value error ===== */
+.fund-key-msg.ok { color: var(--buy); }
+.fund-key-msg.err { color: var(--sell); }
+.val-reason { font-size: 12px; color: var(--muted); margin: 6px 0; }
+.val-reason code { background: var(--panel2); padding: 2px 6px; border-radius: 5px; word-break: break-word; }
+
 </style>
 </head>
 <body>
@@ -660,6 +683,7 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
           <div class="fund-key-row">
             <input id="fmpKeyInput" type="password" placeholder="API key" autocomplete="off" spellcheck="false" />
             <button id="saveKeyBtn" class="btn-ghost">Save</button>
+            <button id="testKeyBtn" class="btn-ghost">Test</button>
           </div>
           <div id="fmpKeyMsg" class="fund-key-msg"></div>
         </div>
@@ -881,8 +905,14 @@ BTC-USD 0.5
           </div>
         </div>
 
-        <div id="doctorResults"></div>
-        <div id="doctorIdeas"></div>
+        <div class="doctor-export hidden" id="doctorExport">
+          <button id="dlPdf" class="btn-ghost">🖨️ Save as PDF</button>
+          <button id="dlPng" class="btn-ghost">🖼️ Download image</button>
+        </div>
+        <div id="doctorReport">
+          <div id="doctorResults"></div>
+          <div id="doctorIdeas"></div>
+        </div>
       </section>
 
       <!-- ============ STOCK RANKER ============ -->
@@ -1441,13 +1471,41 @@ const WATCHLISTS = [
 
 
 // portfolio.js — paper-trading simulator. A fake cash balance and positions,
-// stored per logged-in user in localStorage, trading at real live prices.
+// persisted in localStorage on this device, trading at real live prices.
 // Purely simulated — no real orders, no real money.
+//
+// Storage is device-wide (one stable key) rather than per-login, so signing in
+// or out never loses your portfolio. (Real per-user sync would need a backend.)
 
 const START_CASH = 100000;
+const PF_STORE_KEY = "signaldesk_portfolio_v2";
 
-function keyFor(email) {
-  return "signaldesk_portfolio_" + (email || "guest");
+// email param is kept for call-site compatibility but no longer changes the key.
+function keyFor() {
+  return PF_STORE_KEY;
+}
+
+// One-time migration: adopt the richest legacy per-user/guest portfolio that may
+// have been saved under the old login-specific keys, so nothing is lost.
+function findLegacyPortfolio() {
+  try {
+    let best = null;
+    let bestScore = -1;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith("signaldesk_portfolio_") || k === PF_STORE_KEY) continue;
+      try {
+        const p = JSON.parse(localStorage.getItem(k));
+        if (p && typeof p.cash === "number" && p.positions) {
+          const score = Object.keys(p.positions).length * 1000 + (p.history ? p.history.length : 0);
+          if (score > bestScore) { bestScore = score; best = p; }
+        }
+      } catch { /* skip */ }
+    }
+    return best;
+  } catch {
+    return null;
+  }
 }
 
 function fresh() {
@@ -1481,10 +1539,16 @@ function snapshot(email, total) {
 
 function load(email) {
   try {
-    const p = JSON.parse(localStorage.getItem(keyFor(email)));
+    const p = JSON.parse(localStorage.getItem(PF_STORE_KEY));
     if (p && typeof p.cash === "number" && p.positions) return p;
   } catch {
     /* fall through */
+  }
+  // nothing under the new key yet — migrate any legacy login-scoped portfolio
+  const legacy = findLegacyPortfolio();
+  if (legacy) {
+    save(email, legacy);
+    return legacy;
   }
   return fresh();
 }
@@ -2129,6 +2193,7 @@ async function fetchQuote(symbol) {
 // Modeling Prep (free API key) when present, and best-effort keyless Yahoo
 // quoteSummary via proxy otherwise. Returns a normalized object or null.
 const FMP = "https://financialmodelingprep.com/api/v3";
+const FMP_STABLE = "https://financialmodelingprep.com/stable";
 const FMP_KEY_STORE = "signaldesk_fmp_key";
 
 function getFmpKey() {
@@ -2147,69 +2212,129 @@ function setFmpKey(k) {
   }
 }
 
-async function fmpGet(path, key) {
-  const url = `${FMP}${path}${path.includes("?") ? "&" : "?"}apikey=${encodeURIComponent(key)}`;
+// Robust JSON GET that surfaces FMP's actual error text (401/limit/etc).
+async function fmpJSON(url) {
   const res = await tfetch(url, 8000);
-  if (!res.ok) throw new Error("FMP " + res.status);
-  const j = await res.json();
+  const txt = await res.text();
+  let j;
+  try {
+    j = JSON.parse(txt);
+  } catch {
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 90)}`);
+  }
   if (j && j["Error Message"]) throw new Error(j["Error Message"]);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return j;
 }
-
-async function fetchFundamentalsFull(symbol) {
-  const key = getFmpKey();
-  if (key) {
-    try {
-      return await fromFMP(symbol, key);
-    } catch {
-      /* fall back to keyless Yahoo */
-    }
-  }
-  try {
-    return await fromYahooFundamentals(symbol);
-  } catch {
-    return null;
-  }
+// v3 uses path params + apikey; kept for the batched ranker calls.
+async function fmpGet(path, key) {
+  return fmpJSON(`${FMP}${path}${path.includes("?") ? "&" : "?"}apikey=${encodeURIComponent(key)}`);
 }
 
-async function fromFMP(sym, key) {
-  const [prof, ratios, inc] = await Promise.all([
-    fmpGet(`/profile/${sym}`, key),
-    fmpGet(`/ratios-ttm/${sym}`, key),
-    fmpGet(`/income-statement/${sym}?period=quarter&limit=6`, key),
-  ]);
-  const p = Array.isArray(prof) ? prof[0] : null;
-  const r = Array.isArray(ratios) ? ratios[0] : null;
-  const q = Array.isArray(inc) ? inc : []; // newest first
-  if (!p && !r) throw new Error("no FMP data");
-  const epsTrend = q.slice(0, 6).map((x) => +x.eps).reverse(); // oldest → newest
-  const epsTTM = q.slice(0, 4).reduce((s, x) => s + (+x.eps || 0), 0);
-  const revenueTTM = q.slice(0, 4).reduce((s, x) => s + (+x.revenue || 0), 0) || null;
-  // YoY revenue growth: most recent quarter vs the same quarter a year ago
-  const revenueGrowthPct =
-    q[0] && q[4] && q[4].revenue ? ((q[0].revenue - q[4].revenue) / Math.abs(q[4].revenue)) * 100 : null;
-  const netMarginPct = r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null;
-  const grossMarginPct = r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null;
+function pick(o, ...keys) {
+  for (const k of keys) if (o && o[k] != null) return o[k];
+  return null;
+}
+
+// Normalize a profile + ratios-ttm + quarterly income into our shape, tolerating
+// the field-name differences between the legacy v3 and newer /stable responses.
+function normalizeFmp(p, r, quarters, sym) {
+  const q = Array.isArray(quarters) ? quarters : [];
+  const epsOf = (x) => +pick(x, "eps", "epsdiluted", "epsDiluted");
+  const epsTrend = q.slice(0, 6).map(epsOf).filter((v) => Number.isFinite(v)).reverse();
+  const epsTTM = q.slice(0, 4).reduce((s, x) => s + (epsOf(x) || 0), 0);
+  const revTTM = q.slice(0, 4).reduce((s, x) => s + (+pick(x, "revenue") || 0), 0) || null;
+  const rev0 = pick(q[0], "revenue");
+  const rev4 = pick(q[4], "revenue");
+  const revenueGrowthPct = rev0 != null && rev4 ? ((rev0 - rev4) / Math.abs(rev4)) * 100 : null;
+  const nm = pick(r, "netProfitMarginTTM", "netProfitMargin");
+  const gm = pick(r, "grossProfitMarginTTM", "grossProfitMargin");
+  const pe = pick(r, "priceEarningsRatioTTM", "priceToEarningsRatioTTM", "peRatioTTM", "peRatio");
+  const d2e = pick(r, "debtEquityRatioTTM", "debtToEquityRatioTTM", "debtToEquityTTM", "debtToEquity");
+  const cr = pick(r, "currentRatioTTM", "currentRatio");
+  const netMarginPct = nm != null ? nm * 100 : null;
+  const grossMarginPct = gm != null ? gm * 100 : null;
   return {
     symbol: sym,
-    name: p ? p.companyName : sym,
-    sector: p ? p.sector : null,
-    industry: p ? p.industry : null,
-    price: p && p.price != null ? +p.price : null,
-    marketCap: p && p.mktCap != null ? +p.mktCap : null,
-    beta: p && p.beta != null ? +p.beta : null,
-    eps: epsTTM || (q[0] && q[0].eps != null ? +q[0].eps : null),
+    name: pick(p, "companyName") || sym,
+    sector: pick(p, "sector"),
+    industry: pick(p, "industry"),
+    price: numOrNull(pick(p, "price")),
+    marketCap: numOrNull(pick(p, "mktCap", "marketCap", "marketCapTTM")),
+    beta: numOrNull(pick(p, "beta")),
+    eps: epsTTM || null,
     epsTrend: epsTrend.length ? epsTrend : null,
-    pe: r && r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
+    pe: numOrNull(pe),
     grossMarginPct,
     netMarginPct,
-    revenue: revenueTTM,
+    revenue: revTTM,
     revenueGrowthPct,
-    debtToEquity: r && r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
-    currentRatio: r && r.currentRatioTTM != null ? +r.currentRatioTTM : null,
+    debtToEquity: numOrNull(d2e),
+    currentRatio: numOrNull(cr),
     fcfPositive: netMarginPct != null ? netMarginPct > 0 : null,
     source: "Financial Modeling Prep",
   };
+}
+function numOrNull(v) {
+  return v != null && Number.isFinite(+v) ? +v : null;
+}
+
+async function fromFMPv3(sym, key) {
+  const [p, r, inc] = await Promise.all([
+    fmpJSON(`${FMP}/profile/${sym}?apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP}/ratios-ttm/${sym}?apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP}/income-statement/${sym}?period=quarter&limit=6&apikey=${encodeURIComponent(key)}`),
+  ]);
+  const prof = Array.isArray(p) ? p[0] : p;
+  const rat = Array.isArray(r) ? r[0] : r;
+  if (!prof && !rat) throw new Error("no rows");
+  return normalizeFmp(prof, rat, inc, sym);
+}
+async function fromFMPStable(sym, key) {
+  const [p, r, inc] = await Promise.all([
+    fmpJSON(`${FMP_STABLE}/profile?symbol=${sym}&apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP_STABLE}/ratios-ttm?symbol=${sym}&apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP_STABLE}/income-statement?symbol=${sym}&period=quarter&limit=6&apikey=${encodeURIComponent(key)}`),
+  ]);
+  const prof = Array.isArray(p) ? p[0] : p;
+  const rat = Array.isArray(r) ? r[0] : r;
+  if (!prof && !rat) throw new Error("no rows");
+  return normalizeFmp(prof, rat, inc, sym);
+}
+
+// Returns the normalized object, or { __error } describing why it failed.
+async function fetchFundamentalsFull(symbol) {
+  const key = getFmpKey();
+  let err = "";
+  if (key) {
+    try { return await fromFMPv3(symbol, key); } catch (e) { err = "v3 " + e.message; }
+    try { return await fromFMPStable(symbol, key); } catch (e) { err += " · stable " + e.message; }
+  } else {
+    err = "no API key";
+  }
+  try { return await fromYahooFundamentals(symbol); } catch (e) { err += " · yahoo " + e.message; }
+  return { __error: err };
+}
+
+// Quick diagnostic for the side-menu "Test key" button.
+async function testFmpKey() {
+  const key = getFmpKey();
+  if (!key) return { ok: false, msg: "No key saved yet." };
+  // try v3 then stable
+  try {
+    const a = await fmpJSON(`${FMP}/profile/AAPL?apikey=${encodeURIComponent(key)}`);
+    const p = Array.isArray(a) ? a[0] : a;
+    if (p && p.symbol) return { ok: true, msg: `Working (v3) — AAPL @ $${p.price}.` };
+  } catch (e) {
+    try {
+      const a = await fmpJSON(`${FMP_STABLE}/profile?symbol=AAPL&apikey=${encodeURIComponent(key)}`);
+      const p = Array.isArray(a) ? a[0] : a;
+      if (p && p.symbol) return { ok: true, msg: `Working (stable) — AAPL @ $${p.price}.` };
+    } catch (e2) {
+      return { ok: false, msg: `${e.message} / ${e2.message}` };
+    }
+  }
+  return { ok: false, msg: "Key accepted but returned no data (plan/endpoint limit?)." };
 }
 
 async function fromYahooFundamentals(sym) {
@@ -2264,24 +2389,36 @@ async function fetchProfiles(symbols) {
   const key = getFmpKey();
   const out = {};
   if (!key) return out;
+  const store = (p) => {
+    if (!p || !p.symbol) return;
+    out[p.symbol.toUpperCase()] = {
+      name: p.companyName || p.symbol,
+      sector: p.sector || null,
+      price: numOrNull(pick(p, "price")),
+      marketCap: numOrNull(pick(p, "mktCap", "marketCap")),
+      beta: numOrNull(pick(p, "beta")),
+    };
+  };
   const chunks = [];
   for (let i = 0; i < symbols.length; i += 50) chunks.push(symbols.slice(i, i + 50));
   for (const chunk of chunks) {
+    let got = false;
     try {
       const arr = await fmpGet(`/profile/${chunk.join(",")}`, key);
-      for (const p of Array.isArray(arr) ? arr : []) {
-        if (!p || !p.symbol) continue;
-        out[p.symbol.toUpperCase()] = {
-          name: p.companyName || p.symbol,
-          sector: p.sector || null,
-          price: p.price != null ? +p.price : null,
-          marketCap: p.mktCap != null ? +p.mktCap : null,
-          beta: p.beta != null ? +p.beta : null,
-        };
-      }
+      for (const p of Array.isArray(arr) ? arr : []) { store(p); got = true; }
     } catch {
-      /* skip this chunk */
+      /* v3 failed for this chunk */
     }
+    if (got) continue;
+    // stable fallback — fetch each symbol individually
+    await mapLimit(chunk, 5, async (sym) => {
+      try {
+        const arr = await fmpJSON(`${FMP_STABLE}/profile?symbol=${sym}&apikey=${encodeURIComponent(key)}`);
+        store(Array.isArray(arr) ? arr[0] : arr);
+      } catch {
+        /* skip */
+      }
+    });
   }
   return out;
 }
@@ -2290,19 +2427,28 @@ async function fetchProfiles(symbols) {
 async function fetchRatiosTTM(sym) {
   const key = getFmpKey();
   if (!key) return null;
+  const shape = (r) =>
+    !r
+      ? null
+      : {
+          grossMarginPct: (() => { const v = pick(r, "grossProfitMarginTTM", "grossProfitMargin"); return v != null ? v * 100 : null; })(),
+          netMarginPct: (() => { const v = pick(r, "netProfitMarginTTM", "netProfitMargin"); return v != null ? v * 100 : null; })(),
+          pe: numOrNull(pick(r, "priceEarningsRatioTTM", "priceToEarningsRatioTTM", "peRatioTTM", "peRatio")),
+          debtToEquity: numOrNull(pick(r, "debtEquityRatioTTM", "debtToEquityRatioTTM", "debtToEquityTTM", "debtToEquity")),
+          currentRatio: numOrNull(pick(r, "currentRatioTTM", "currentRatio")),
+        };
   try {
     const arr = await fmpGet(`/ratios-ttm/${sym}`, key);
-    const r = Array.isArray(arr) ? arr[0] : null;
-    if (!r) return null;
-    return {
-      grossMarginPct: r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null,
-      netMarginPct: r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null,
-      pe: r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
-      debtToEquity: r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
-      currentRatio: r.currentRatioTTM != null ? +r.currentRatioTTM : null,
-    };
+    const r = shape(Array.isArray(arr) ? arr[0] : arr);
+    if (r) return r;
+    throw new Error("empty");
   } catch {
-    return null;
+    try {
+      const arr = await fmpJSON(`${FMP_STABLE}/ratios-ttm?symbol=${sym}&apikey=${encodeURIComponent(key)}`);
+      return shape(Array.isArray(arr) ? arr[0] : arr);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -3118,10 +3264,11 @@ const state = { candles: [], result: null, fundamentals: null };
 const DEV_FULL_ACCESS = true;
 
 function currentTier() {
+  // Dev mode unlocks everything for everyone — signed in or not — so logging in
+  // never locks features. The "preview tier" pick still lets you test gating.
+  if (DEV_FULL_ACCESS) return TIERS[auth.getViewAs() || "pro"] || TIERS.pro;
   const u = auth.getUser();
   if (u) return TIERS[auth.effectiveTierId()] || TIERS.free;
-  // not signed in: dev mode unlocks everything (respecting any "preview tier" pick)
-  if (DEV_FULL_ACCESS) return TIERS[auth.getViewAs() || "pro"] || TIERS.pro;
   return TIERS.free;
 }
 
@@ -3209,8 +3356,8 @@ async function loadValue(symbol, tier) {
 
   const f = await fetchFundamentalsFull(symbol);
   if (myReq !== valueReqId) return; // superseded by a newer analyze
-  if (!f || (f.netMarginPct == null && f.grossMarginPct == null && f.pe == null)) {
-    $("valueContent").innerHTML = noFundamentalsMsg();
+  if (!f || f.__error || (f.netMarginPct == null && f.grossMarginPct == null && f.pe == null)) {
+    $("valueContent").innerHTML = noFundamentalsMsg(f && f.__error);
     return;
   }
 
@@ -3266,18 +3413,20 @@ function renderValue(f, card) {
     <p class="val-source">Fundamentals via ${esc(f.source || "provider")}. Educational scoring — not financial advice; verify figures before investing.</p>`;
 }
 
-function noFundamentalsMsg() {
+function noFundamentalsMsg(reason) {
   const hasKey = !!getFmpKey();
   return `<div class="val-empty">
     <p><b>Fundamentals unavailable for this symbol.</b> ${
       hasKey
-        ? "Your data key didn't return figures for this ticker (it may be an ETF/ADR/non-US listing)."
+        ? "The data provider didn't return figures. This can be a non-US/ETF ticker, a rate limit, or a key that only works on one API version."
         : "Quality & value scoring needs a fundamentals data source."
     }</p>
+    ${reason ? `<p class="val-reason">Provider said: <code>${esc(reason)}</code></p>` : ""}
     ${
       hasKey
-        ? ""
-        : `<p>Add a <b>free</b> Financial Modeling Prep API key (takes ~30 seconds) in the <b>☰ Account</b> menu → Fundamentals data. Get one at
+        ? `<p>Open <b>☰ Account → Fundamentals data</b> and hit <b>Test key</b> to check it, or paste a fresh key. Get one free at
+           <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>`
+        : `<p>Add a <b>free</b> Financial Modeling Prep API key (~30 seconds) in the <b>☰ Account</b> menu → Fundamentals data. Get one at
            <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>`
     }
   </div>`;
@@ -4210,12 +4359,90 @@ function assetType(symbol) {
   return "Stock";
 }
 
+// Export the Portfolio Doctor report as PDF (via print) or a PNG image.
+function exportDoctorPdf() {
+  document.body.classList.add("printing-doctor");
+  const prevTitle = document.title;
+  document.title = "SignalDesk Portfolio Doctor";
+  const cleanup = () => {
+    document.body.classList.remove("printing-doctor");
+    document.title = prevTitle;
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  window.print();
+  setTimeout(cleanup, 1500);
+}
+
+// Dependency-free DOM→PNG using an SVG <foreignObject> snapshot.
+async function nodeToPng(node) {
+  const w = Math.ceil(node.scrollWidth) || 800;
+  const h = Math.ceil(node.scrollHeight) || 600;
+  let css = "";
+  for (const sheet of document.styleSheets) {
+    try {
+      css += [...(sheet.cssRules || [])].map((r) => r.cssText).join("");
+    } catch {
+      /* cross-origin sheet — skip */
+    }
+  }
+  const clone = node.cloneNode(true);
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  wrapper.style.cssText = `width:${w}px;background:#0b0e13;padding:18px;color:#e6ebf2;font-family:Inter,system-ui,sans-serif`;
+  wrapper.appendChild(clone);
+  const xml = new XMLSerializer().serializeToString(wrapper);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h + 40}"><foreignObject width="100%" height="100%"><style>${css}</style>${xml}</foreignObject></svg>`;
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error("render failed"));
+    img.src = url;
+  });
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = w * scale;
+  canvas.height = (h + 40) * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#0b0e13";
+  ctx.fillRect(0, 0, w, h + 40);
+  ctx.drawImage(img, 0, 0);
+  return await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("blob failed"))), "image/png"));
+}
+async function exportDoctorPng() {
+  const btn = $("dlPng");
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Rendering…";
+  try {
+    const blob = await nodeToPng($("doctorReport"));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "portfolio-doctor.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  } catch (e) {
+    console.error("PNG export failed:", e);
+    alert("Couldn't render an image in this browser. Use “Save as PDF” instead — the print dialog can save a PDF (or an image) of the report.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
 let doctorBusy = false;
 async function runDoctor() {
   if (doctorBusy) return;
   const text = $("holdingsInput").value;
+  try { localStorage.setItem("signaldesk_doctor_holdings", text); } catch {}
   const holdings = parseHoldings(text);
   const out = $("doctorResults");
+  $("doctorExport").classList.add("hidden");
   if (!holdings.length) {
     out.innerHTML = `<p class="section-intro">Paste your holdings above (one per line, e.g. <code>AAPL 50</code>) or upload a CSV, then click Analyze.</p>`;
     return;
@@ -4252,6 +4479,7 @@ async function runDoctor() {
   analyzed.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
   renderDoctor(analyzed, totalValue);
+  $("doctorExport").classList.remove("hidden");
 
   // Ideas to add: strong-signal candidates not already held
   const held = new Set(okRows.map((r) => r.symbol));
@@ -4306,7 +4534,11 @@ function renderDoctor(rows, totalValue) {
         </tr>`).join("")}</tbody>
     </table></div>`;
 
-  $("doctorResults").innerHTML = summary + table;
+  const header = `<div class="report-head">
+      <div class="report-brand"><span class="spark">▲</span> SignalDesk · Portfolio Doctor</div>
+      <div class="report-date">${rows.length} holdings · ${new Date().toLocaleString()}</div>
+    </div>`;
+  $("doctorResults").innerHTML = header + summary + table;
 }
 
 function diversificationNote(types, topWeight, divScore) {
@@ -5071,7 +5303,19 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("loadSampleBtn").addEventListener("click", () => {
     $("holdingsInput").value = "AAPL 60\nNVDA 40\nMSFT 30\nVOO 25\nSCHD 200\nTSLA 50\nBTC-USD 0.4";
+    try { localStorage.setItem("signaldesk_doctor_holdings", $("holdingsInput").value); } catch {}
   });
+  // remember the holdings you typed
+  try {
+    const savedHoldings = localStorage.getItem("signaldesk_doctor_holdings");
+    if (savedHoldings) $("holdingsInput").value = savedHoldings;
+  } catch {}
+  $("holdingsInput").addEventListener("input", () => {
+    try { localStorage.setItem("signaldesk_doctor_holdings", $("holdingsInput").value); } catch {}
+  });
+  // export
+  $("dlPdf").addEventListener("click", exportDoctorPdf);
+  $("dlPng").addEventListener("click", exportDoctorPng);
 
   // stock ranker
   $("rankerSearch").addEventListener("input", () => {
@@ -5111,10 +5355,19 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("saveKeyBtn").addEventListener("click", () => {
     setFmpKey($("fmpKeyInput").value);
-    $("fmpKeyMsg").textContent = getFmpKey()
-      ? "✓ Saved. Fundamentals enabled — re-run an analysis to see scores."
-      : "Key cleared.";
+    const msg = $("fmpKeyMsg");
+    msg.className = "fund-key-msg";
+    msg.textContent = getFmpKey() ? "✓ Saved. Hit Test to verify, then re-run an analysis." : "Key cleared.";
     if (state.result) run();
+  });
+  $("testKeyBtn").addEventListener("click", async () => {
+    const msg = $("fmpKeyMsg");
+    setFmpKey($("fmpKeyInput").value); // test whatever is in the box
+    msg.className = "fund-key-msg";
+    msg.textContent = "Testing…";
+    const res = await testFmpKey();
+    msg.className = "fund-key-msg " + (res.ok ? "ok" : "err");
+    msg.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
   });
   $("menuClose").addEventListener("click", closeMenu);
   $("menuBackdrop").addEventListener("click", closeMenu);

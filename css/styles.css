@@ -592,3 +592,26 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
   cursor: pointer; filter: grayscale(0.4) opacity(0.6); }
 #chartType .ct-btn:hover { filter: none; background: rgba(255,255,255,0.05); }
 #chartType .ct-btn.active { filter: none; background: linear-gradient(180deg,#21324c,#17233a); box-shadow: 0 0 0 1px rgba(76,154,255,0.35); }
+
+/* ===== Portfolio Doctor export ===== */
+.doctor-export { display: flex; gap: 8px; margin: 4px 0 10px; flex-wrap: wrap; }
+.report-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.report-brand { font-weight: 800; font-size: 16px; }
+.report-brand .spark { color: var(--accent); }
+.report-date { font-size: 12px; color: var(--muted); }
+#doctorReport { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+@media print {
+  body.printing-doctor * { visibility: hidden !important; }
+  body.printing-doctor #doctorReport,
+  body.printing-doctor #doctorReport * { visibility: visible !important; }
+  body.printing-doctor #doctorReport { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+  body.printing-doctor .doctor-export { display: none !important; }
+}
+
+/* ===== Key test / value error ===== */
+.fund-key-msg.ok { color: var(--buy); }
+.fund-key-msg.err { color: var(--sell); }
+.val-reason { font-size: 12px; color: var(--muted); margin: 6px 0; }
+.val-reason code { background: var(--panel2); padding: 2px 6px; border-radius: 5px; word-break: break-word; }

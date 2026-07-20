@@ -1,11 +1,39 @@
 // portfolio.js — paper-trading simulator. A fake cash balance and positions,
-// stored per logged-in user in localStorage, trading at real live prices.
+// persisted in localStorage on this device, trading at real live prices.
 // Purely simulated — no real orders, no real money.
+//
+// Storage is device-wide (one stable key) rather than per-login, so signing in
+// or out never loses your portfolio. (Real per-user sync would need a backend.)
 
 const START_CASH = 100000;
+const PF_STORE_KEY = "signaldesk_portfolio_v2";
 
-function keyFor(email) {
-  return "signaldesk_portfolio_" + (email || "guest");
+// email param is kept for call-site compatibility but no longer changes the key.
+function keyFor() {
+  return PF_STORE_KEY;
+}
+
+// One-time migration: adopt the richest legacy per-user/guest portfolio that may
+// have been saved under the old login-specific keys, so nothing is lost.
+function findLegacyPortfolio() {
+  try {
+    let best = null;
+    let bestScore = -1;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith("signaldesk_portfolio_") || k === PF_STORE_KEY) continue;
+      try {
+        const p = JSON.parse(localStorage.getItem(k));
+        if (p && typeof p.cash === "number" && p.positions) {
+          const score = Object.keys(p.positions).length * 1000 + (p.history ? p.history.length : 0);
+          if (score > bestScore) { bestScore = score; best = p; }
+        }
+      } catch { /* skip */ }
+    }
+    return best;
+  } catch {
+    return null;
+  }
 }
 
 function fresh() {
@@ -39,10 +67,16 @@ export function snapshot(email, total) {
 
 export function load(email) {
   try {
-    const p = JSON.parse(localStorage.getItem(keyFor(email)));
+    const p = JSON.parse(localStorage.getItem(PF_STORE_KEY));
     if (p && typeof p.cash === "number" && p.positions) return p;
   } catch {
     /* fall through */
+  }
+  // nothing under the new key yet — migrate any legacy login-scoped portfolio
+  const legacy = findLegacyPortfolio();
+  if (legacy) {
+    save(email, legacy);
+    return legacy;
   }
   return fresh();
 }

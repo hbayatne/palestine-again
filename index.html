@@ -64,6 +64,7 @@
           <div class="fund-key-row">
             <input id="fmpKeyInput" type="password" placeholder="API key" autocomplete="off" spellcheck="false" />
             <button id="saveKeyBtn" class="btn-ghost">Save</button>
+            <button id="testKeyBtn" class="btn-ghost">Test</button>
           </div>
           <div id="fmpKeyMsg" class="fund-key-msg"></div>
         </div>
@@ -285,8 +286,14 @@ BTC-USD 0.5
           </div>
         </div>
 
-        <div id="doctorResults"></div>
-        <div id="doctorIdeas"></div>
+        <div class="doctor-export hidden" id="doctorExport">
+          <button id="dlPdf" class="btn-ghost">🖨️ Save as PDF</button>
+          <button id="dlPng" class="btn-ghost">🖼️ Download image</button>
+        </div>
+        <div id="doctorReport">
+          <div id="doctorResults"></div>
+          <div id="doctorIdeas"></div>
+        </div>
       </section>
 
       <!-- ============ STOCK RANKER ============ -->

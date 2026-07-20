@@ -15,6 +15,7 @@ import {
   fetchRatiosTTM,
   getFmpKey,
   setFmpKey,
+  testFmpKey,
 } from "./data.js";
 import { buildScorecard, scoreCompetition, INDUSTRY_PEERS, buildRankerRow } from "./valuation.js";
 import { TIERS, TIER_ORDER } from "./tiers.js";
@@ -131,10 +132,11 @@ const state = { candles: [], result: null, fundamentals: null };
 const DEV_FULL_ACCESS = true;
 
 function currentTier() {
+  // Dev mode unlocks everything for everyone — signed in or not — so logging in
+  // never locks features. The "preview tier" pick still lets you test gating.
+  if (DEV_FULL_ACCESS) return TIERS[auth.getViewAs() || "pro"] || TIERS.pro;
   const u = auth.getUser();
   if (u) return TIERS[auth.effectiveTierId()] || TIERS.free;
-  // not signed in: dev mode unlocks everything (respecting any "preview tier" pick)
-  if (DEV_FULL_ACCESS) return TIERS[auth.getViewAs() || "pro"] || TIERS.pro;
   return TIERS.free;
 }
 
@@ -222,8 +224,8 @@ async function loadValue(symbol, tier) {
 
   const f = await fetchFundamentalsFull(symbol);
   if (myReq !== valueReqId) return; // superseded by a newer analyze
-  if (!f || (f.netMarginPct == null && f.grossMarginPct == null && f.pe == null)) {
-    $("valueContent").innerHTML = noFundamentalsMsg();
+  if (!f || f.__error || (f.netMarginPct == null && f.grossMarginPct == null && f.pe == null)) {
+    $("valueContent").innerHTML = noFundamentalsMsg(f && f.__error);
     return;
   }
 
@@ -279,18 +281,20 @@ function renderValue(f, card) {
     <p class="val-source">Fundamentals via ${esc(f.source || "provider")}. Educational scoring — not financial advice; verify figures before investing.</p>`;
 }
 
-function noFundamentalsMsg() {
+function noFundamentalsMsg(reason) {
   const hasKey = !!getFmpKey();
   return `<div class="val-empty">
     <p><b>Fundamentals unavailable for this symbol.</b> ${
       hasKey
-        ? "Your data key didn't return figures for this ticker (it may be an ETF/ADR/non-US listing)."
+        ? "The data provider didn't return figures. This can be a non-US/ETF ticker, a rate limit, or a key that only works on one API version."
         : "Quality & value scoring needs a fundamentals data source."
     }</p>
+    ${reason ? `<p class="val-reason">Provider said: <code>${esc(reason)}</code></p>` : ""}
     ${
       hasKey
-        ? ""
-        : `<p>Add a <b>free</b> Financial Modeling Prep API key (takes ~30 seconds) in the <b>☰ Account</b> menu → Fundamentals data. Get one at
+        ? `<p>Open <b>☰ Account → Fundamentals data</b> and hit <b>Test key</b> to check it, or paste a fresh key. Get one free at
+           <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>`
+        : `<p>Add a <b>free</b> Financial Modeling Prep API key (~30 seconds) in the <b>☰ Account</b> menu → Fundamentals data. Get one at
            <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>`
     }
   </div>`;
@@ -1223,12 +1227,90 @@ function assetType(symbol) {
   return "Stock";
 }
 
+// Export the Portfolio Doctor report as PDF (via print) or a PNG image.
+function exportDoctorPdf() {
+  document.body.classList.add("printing-doctor");
+  const prevTitle = document.title;
+  document.title = "SignalDesk Portfolio Doctor";
+  const cleanup = () => {
+    document.body.classList.remove("printing-doctor");
+    document.title = prevTitle;
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  window.print();
+  setTimeout(cleanup, 1500);
+}
+
+// Dependency-free DOM→PNG using an SVG <foreignObject> snapshot.
+async function nodeToPng(node) {
+  const w = Math.ceil(node.scrollWidth) || 800;
+  const h = Math.ceil(node.scrollHeight) || 600;
+  let css = "";
+  for (const sheet of document.styleSheets) {
+    try {
+      css += [...(sheet.cssRules || [])].map((r) => r.cssText).join("");
+    } catch {
+      /* cross-origin sheet — skip */
+    }
+  }
+  const clone = node.cloneNode(true);
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  wrapper.style.cssText = `width:${w}px;background:#0b0e13;padding:18px;color:#e6ebf2;font-family:Inter,system-ui,sans-serif`;
+  wrapper.appendChild(clone);
+  const xml = new XMLSerializer().serializeToString(wrapper);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h + 40}"><foreignObject width="100%" height="100%"><style>${css}</style>${xml}</foreignObject></svg>`;
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error("render failed"));
+    img.src = url;
+  });
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = w * scale;
+  canvas.height = (h + 40) * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#0b0e13";
+  ctx.fillRect(0, 0, w, h + 40);
+  ctx.drawImage(img, 0, 0);
+  return await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("blob failed"))), "image/png"));
+}
+async function exportDoctorPng() {
+  const btn = $("dlPng");
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Rendering…";
+  try {
+    const blob = await nodeToPng($("doctorReport"));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "portfolio-doctor.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  } catch (e) {
+    console.error("PNG export failed:", e);
+    alert("Couldn't render an image in this browser. Use “Save as PDF” instead — the print dialog can save a PDF (or an image) of the report.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
 let doctorBusy = false;
 async function runDoctor() {
   if (doctorBusy) return;
   const text = $("holdingsInput").value;
+  try { localStorage.setItem("signaldesk_doctor_holdings", text); } catch {}
   const holdings = parseHoldings(text);
   const out = $("doctorResults");
+  $("doctorExport").classList.add("hidden");
   if (!holdings.length) {
     out.innerHTML = `<p class="section-intro">Paste your holdings above (one per line, e.g. <code>AAPL 50</code>) or upload a CSV, then click Analyze.</p>`;
     return;
@@ -1265,6 +1347,7 @@ async function runDoctor() {
   analyzed.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
   renderDoctor(analyzed, totalValue);
+  $("doctorExport").classList.remove("hidden");
 
   // Ideas to add: strong-signal candidates not already held
   const held = new Set(okRows.map((r) => r.symbol));
@@ -1319,7 +1402,11 @@ function renderDoctor(rows, totalValue) {
         </tr>`).join("")}</tbody>
     </table></div>`;
 
-  $("doctorResults").innerHTML = summary + table;
+  const header = `<div class="report-head">
+      <div class="report-brand"><span class="spark">▲</span> SignalDesk · Portfolio Doctor</div>
+      <div class="report-date">${rows.length} holdings · ${new Date().toLocaleString()}</div>
+    </div>`;
+  $("doctorResults").innerHTML = header + summary + table;
 }
 
 function diversificationNote(types, topWeight, divScore) {
@@ -2084,7 +2171,19 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("loadSampleBtn").addEventListener("click", () => {
     $("holdingsInput").value = "AAPL 60\nNVDA 40\nMSFT 30\nVOO 25\nSCHD 200\nTSLA 50\nBTC-USD 0.4";
+    try { localStorage.setItem("signaldesk_doctor_holdings", $("holdingsInput").value); } catch {}
   });
+  // remember the holdings you typed
+  try {
+    const savedHoldings = localStorage.getItem("signaldesk_doctor_holdings");
+    if (savedHoldings) $("holdingsInput").value = savedHoldings;
+  } catch {}
+  $("holdingsInput").addEventListener("input", () => {
+    try { localStorage.setItem("signaldesk_doctor_holdings", $("holdingsInput").value); } catch {}
+  });
+  // export
+  $("dlPdf").addEventListener("click", exportDoctorPdf);
+  $("dlPng").addEventListener("click", exportDoctorPng);
 
   // stock ranker
   $("rankerSearch").addEventListener("input", () => {
@@ -2124,10 +2223,19 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("saveKeyBtn").addEventListener("click", () => {
     setFmpKey($("fmpKeyInput").value);
-    $("fmpKeyMsg").textContent = getFmpKey()
-      ? "✓ Saved. Fundamentals enabled — re-run an analysis to see scores."
-      : "Key cleared.";
+    const msg = $("fmpKeyMsg");
+    msg.className = "fund-key-msg";
+    msg.textContent = getFmpKey() ? "✓ Saved. Hit Test to verify, then re-run an analysis." : "Key cleared.";
     if (state.result) run();
+  });
+  $("testKeyBtn").addEventListener("click", async () => {
+    const msg = $("fmpKeyMsg");
+    setFmpKey($("fmpKeyInput").value); // test whatever is in the box
+    msg.className = "fund-key-msg";
+    msg.textContent = "Testing…";
+    const res = await testFmpKey();
+    msg.className = "fund-key-msg " + (res.ok ? "ok" : "err");
+    msg.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
   });
   $("menuClose").addEventListener("click", closeMenu);
   $("menuBackdrop").addEventListener("click", closeMenu);
