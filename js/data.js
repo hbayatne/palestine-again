@@ -371,6 +371,55 @@ async function fromYahooFundamentals(sym) {
   };
 }
 
+// Batched company profiles (FMP supports comma-separated symbols in ONE call),
+// so a large ranker universe costs ~N/50 calls instead of N. Returns a map
+// { SYM: {name, sector, price, marketCap, beta} }. Needs an API key.
+export async function fetchProfiles(symbols) {
+  const key = getFmpKey();
+  const out = {};
+  if (!key) return out;
+  const chunks = [];
+  for (let i = 0; i < symbols.length; i += 50) chunks.push(symbols.slice(i, i + 50));
+  for (const chunk of chunks) {
+    try {
+      const arr = await fmpGet(`/profile/${chunk.join(",")}`, key);
+      for (const p of Array.isArray(arr) ? arr : []) {
+        if (!p || !p.symbol) continue;
+        out[p.symbol.toUpperCase()] = {
+          name: p.companyName || p.symbol,
+          sector: p.sector || null,
+          price: p.price != null ? +p.price : null,
+          marketCap: p.mktCap != null ? +p.mktCap : null,
+          beta: p.beta != null ? +p.beta : null,
+        };
+      }
+    } catch {
+      /* skip this chunk */
+    }
+  }
+  return out;
+}
+
+// TTM ratios for one symbol (margins, P/E, balance-sheet). Light — 1 call.
+export async function fetchRatiosTTM(sym) {
+  const key = getFmpKey();
+  if (!key) return null;
+  try {
+    const arr = await fmpGet(`/ratios-ttm/${sym}`, key);
+    const r = Array.isArray(arr) ? arr[0] : null;
+    if (!r) return null;
+    return {
+      grossMarginPct: r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null,
+      netMarginPct: r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null,
+      pe: r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
+      debtToEquity: r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
+      currentRatio: r.currentRatioTTM != null ? +r.currentRatioTTM : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Lightweight peer metrics for competitive ranking (2 calls per peer).
 export async function fetchPeerMetrics(sym) {
   const key = getFmpKey();

@@ -282,6 +282,32 @@ BTC-USD 0.5
           <span id="rankerAsOf" class="ranker-asof"></span>
           <button id="rankerRefresh" class="btn-ghost">↻ Refresh</button>
         </div>
+        <div class="ranker-filters">
+          <select id="fltGrade">
+            <option value="0">Grade: any</option>
+            <option value="58">C+ &amp; up</option>
+            <option value="66">B &amp; up</option>
+            <option value="74">B+ &amp; up</option>
+            <option value="82">A &amp; up</option>
+          </select>
+          <select id="fltSignal">
+            <option value="any">Signal: any</option>
+            <option value="buy">BUY or better</option>
+            <option value="strong">STRONG BUY only</option>
+            <option value="notsell">Not SELL</option>
+          </select>
+          <select id="fltValue">
+            <option value="any">Valuation: any</option>
+            <option value="under">Undervalued</option>
+            <option value="fairbetter">Fair or cheaper</option>
+          </select>
+          <select id="fltSector"><option value="">Sector: all</option></select>
+        </div>
+        <div class="ranker-universe">
+          <input id="uniAdd" placeholder="Add your tickers (e.g. COIN, PLTR, ASML)" autocomplete="off" />
+          <button id="uniAddBtn" class="btn-ghost">Add</button>
+          <span id="uniChips" class="uni-chips"></span>
+        </div>
         <div id="rankerContent"></div>
       </section>
     </div>
