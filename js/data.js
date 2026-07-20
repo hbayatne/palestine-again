@@ -238,6 +238,163 @@ export async function fetchQuote(symbol) {
   return { price, prevClose: prev, changePct, source: candles._source };
 }
 
+// ===== Fundamentals (for the Value & Quality scorecard) =====
+// Reliable fundamentals aren't available keyless anymore, so we use Financial
+// Modeling Prep (free API key) when present, and best-effort keyless Yahoo
+// quoteSummary via proxy otherwise. Returns a normalized object or null.
+const FMP = "https://financialmodelingprep.com/api/v3";
+const FMP_KEY_STORE = "signaldesk_fmp_key";
+
+export function getFmpKey() {
+  try {
+    return localStorage.getItem(FMP_KEY_STORE) || "";
+  } catch {
+    return "";
+  }
+}
+export function setFmpKey(k) {
+  try {
+    if (k && k.trim()) localStorage.setItem(FMP_KEY_STORE, k.trim());
+    else localStorage.removeItem(FMP_KEY_STORE);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function fmpGet(path, key) {
+  const url = `${FMP}${path}${path.includes("?") ? "&" : "?"}apikey=${encodeURIComponent(key)}`;
+  const res = await tfetch(url, 8000);
+  if (!res.ok) throw new Error("FMP " + res.status);
+  const j = await res.json();
+  if (j && j["Error Message"]) throw new Error(j["Error Message"]);
+  return j;
+}
+
+export async function fetchFundamentalsFull(symbol) {
+  const key = getFmpKey();
+  if (key) {
+    try {
+      return await fromFMP(symbol, key);
+    } catch {
+      /* fall back to keyless Yahoo */
+    }
+  }
+  try {
+    return await fromYahooFundamentals(symbol);
+  } catch {
+    return null;
+  }
+}
+
+async function fromFMP(sym, key) {
+  const [prof, ratios, inc] = await Promise.all([
+    fmpGet(`/profile/${sym}`, key),
+    fmpGet(`/ratios-ttm/${sym}`, key),
+    fmpGet(`/income-statement/${sym}?period=annual&limit=2`, key),
+  ]);
+  const p = Array.isArray(prof) ? prof[0] : null;
+  const r = Array.isArray(ratios) ? ratios[0] : null;
+  const i0 = Array.isArray(inc) ? inc[0] : null;
+  const i1 = Array.isArray(inc) ? inc[1] : null;
+  if (!p && !r) throw new Error("no FMP data");
+  const revenue = i0 && i0.revenue != null ? +i0.revenue : null;
+  const revPrev = i1 && i1.revenue != null ? +i1.revenue : null;
+  const revenueGrowthPct = revenue && revPrev ? ((revenue - revPrev) / Math.abs(revPrev)) * 100 : null;
+  const netMarginPct = r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : revenue && i0 ? (i0.netIncome / revenue) * 100 : null;
+  const grossMarginPct = r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : revenue && i0 ? (i0.grossProfit / revenue) * 100 : null;
+  return {
+    symbol: sym,
+    name: p ? p.companyName : sym,
+    sector: p ? p.sector : null,
+    industry: p ? p.industry : null,
+    price: p && p.price != null ? +p.price : null,
+    marketCap: p && p.mktCap != null ? +p.mktCap : null,
+    beta: p && p.beta != null ? +p.beta : null,
+    eps: i0 && i0.eps != null ? +i0.eps : null,
+    pe: r && r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
+    grossMarginPct,
+    netMarginPct,
+    revenue,
+    revenueGrowthPct,
+    debtToEquity: r && r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
+    currentRatio: r && r.currentRatioTTM != null ? +r.currentRatioTTM : null,
+    fcfPositive: netMarginPct != null ? netMarginPct > 0 : null,
+    source: "Financial Modeling Prep",
+  };
+}
+
+async function fromYahooFundamentals(sym) {
+  const target = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+    sym
+  )}?modules=assetProfile,financialData,defaultKeyStatistics,summaryDetail,price`;
+  let json;
+  for (const wrap of YF_PROXIES) {
+    try {
+      const res = await tfetch(wrap(target), 6000);
+      if (!res.ok) continue;
+      json = await res.json();
+      if (json && json.quoteSummary) break;
+    } catch {
+      /* next proxy */
+    }
+  }
+  const r = json && json.quoteSummary && json.quoteSummary.result && json.quoteSummary.result[0];
+  if (!r) throw new Error("no Yahoo fundamentals");
+  const fd = r.financialData || {};
+  const ks = r.defaultKeyStatistics || {};
+  const sd = r.summaryDetail || {};
+  const pr = r.price || {};
+  const ap = r.assetProfile || {};
+  const num = (o) => (o && o.raw != null ? o.raw : null);
+  const d2e = num(fd.debtToEquity); // Yahoo reports as a percentage
+  return {
+    symbol: sym,
+    name: pr.longName || pr.shortName || sym,
+    sector: ap.sector || null,
+    industry: ap.industry || null,
+    price: num(pr.regularMarketPrice),
+    marketCap: num(pr.marketCap) || num(sd.marketCap),
+    beta: num(ks.beta),
+    eps: num(ks.trailingEps),
+    pe: num(sd.trailingPE),
+    grossMarginPct: num(fd.grossMargins) != null ? num(fd.grossMargins) * 100 : null,
+    netMarginPct: num(fd.profitMargins) != null ? num(fd.profitMargins) * 100 : null,
+    revenue: num(fd.totalRevenue),
+    revenueGrowthPct: num(fd.revenueGrowth) != null ? num(fd.revenueGrowth) * 100 : null,
+    debtToEquity: d2e != null ? d2e / 100 : null,
+    currentRatio: num(fd.currentRatio),
+    fcfPositive: num(fd.freeCashflow) != null ? num(fd.freeCashflow) > 0 : null,
+    source: "Yahoo Finance",
+  };
+}
+
+// Lightweight peer metrics for competitive ranking (2 calls per peer).
+export async function fetchPeerMetrics(sym) {
+  const key = getFmpKey();
+  if (key) {
+    try {
+      const [prof, ratios] = await Promise.all([fmpGet(`/profile/${sym}`, key), fmpGet(`/ratios-ttm/${sym}`, key)]);
+      const p = Array.isArray(prof) ? prof[0] : null;
+      const r = Array.isArray(ratios) ? ratios[0] : null;
+      return {
+        symbol: sym,
+        marketCap: p && p.mktCap != null ? +p.mktCap : null,
+        netMarginPct: r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null,
+        grossMarginPct: r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null,
+        revenue: null,
+      };
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const f = await fromYahooFundamentals(sym);
+    return { symbol: sym, marketCap: f.marketCap, netMarginPct: f.netMarginPct, grossMarginPct: f.grossMarginPct, revenue: f.revenue };
+  } catch {
+    return null;
+  }
+}
+
 // Run an async fn over items with bounded concurrency (keeps proxy load sane).
 export async function mapLimit(items, limit, fn) {
   const results = new Array(items.length);

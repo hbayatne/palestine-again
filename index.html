@@ -55,6 +55,18 @@
           <button id="upgradeBtn" class="btn-ghost">View plans &amp; pricing</button>
           <button id="logoutBtn" class="btn-ghost">Log out</button>
         </div>
+
+        <div class="menu-fund">
+          <label for="fmpKeyInput">Fundamentals data (for Business Quality &amp; Value)</label>
+          <p class="menu-fund-note">Optional. Paste a <b>free</b> Financial Modeling Prep API key to enable
+            company profitability, margins, competition &amp; valuation scoring.
+            <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">Get a free key →</a></p>
+          <div class="fund-key-row">
+            <input id="fmpKeyInput" type="password" placeholder="API key" autocomplete="off" spellcheck="false" />
+            <button id="saveKeyBtn" class="btn-ghost">Save</button>
+          </div>
+          <div id="fmpKeyMsg" class="fund-key-msg"></div>
+        </div>
       </div>
     </div>
 
@@ -150,6 +162,11 @@
               <div id="breakdown"></div>
               <div id="adxNote" class="adx-note"></div>
               <div id="blendNote" class="blend-note"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="valueCard">
+              <h2>🏛️ Business quality &amp; value</h2>
+              <div id="valueContent"></div>
             </div>
           </div>
 

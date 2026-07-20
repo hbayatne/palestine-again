@@ -426,6 +426,48 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
   font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
 .row-sell:hover { background: rgba(226,55,68,0.22); color: #fff; }
 
+/* ===== Business quality & value scorecard ===== */
+.val-top { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.val-grade { flex-shrink: 0; width: 96px; height: 96px; border-radius: 16px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; font-size: 34px; font-weight: 800; background: var(--panel2);
+  border: 1px solid var(--border); }
+.val-grade span { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.val-grade.buy { color: var(--buy); border-color: rgba(22,199,132,0.4); }
+.val-grade.sell { color: var(--sell); border-color: rgba(226,55,68,0.4); }
+.val-meta { flex: 1; min-width: 200px; }
+.val-name { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.val-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+.val-badge.buy { background: rgba(22,199,132,0.16); color: var(--buy); }
+.val-badge.sell { background: rgba(226,55,68,0.16); color: var(--sell); }
+.val-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.val-fair { font-size: 12.5px; color: var(--accent); margin-top: 6px; line-height: 1.5; }
+.val-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.val-row:last-of-type { border-bottom: none; }
+.val-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; font-weight: 600; }
+.val-score { font-family: ui-monospace, monospace; font-size: 15px; }
+.val-score.buy { color: var(--buy); }
+.val-score.hold { color: var(--hold); }
+.val-score.sell { color: var(--sell); }
+.val-na { color: var(--muted); font-size: 12px; }
+.val-bar { height: 6px; background: var(--panel2); border-radius: 4px; margin: 6px 0; overflow: hidden; }
+.val-fill { display: block; height: 100%; border-radius: 4px; }
+.val-fill.buy { background: var(--buy); }
+.val-fill.hold { background: var(--hold); }
+.val-fill.sell { background: var(--sell); }
+.val-hint { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.val-source { font-size: 11.5px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+.val-empty { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.val-empty a, .val-fair a, .menu-fund a { color: var(--accent); }
+
+/* fundamentals key input in side menu */
+.menu-fund { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.menu-fund label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 6px; }
+.menu-fund-note { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0 0 10px; }
+.fund-key-row { display: flex; gap: 8px; }
+.fund-key-row input { flex: 1; }
+.fund-key-msg { font-size: 12px; color: var(--buy); margin-top: 8px; }
+
 </style>
 </head>
 <body>
@@ -476,6 +518,18 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
           <button id="loginBtn" class="btn-upgrade">Log in / Sign up</button>
           <button id="upgradeBtn" class="btn-ghost">View plans &amp; pricing</button>
           <button id="logoutBtn" class="btn-ghost">Log out</button>
+        </div>
+
+        <div class="menu-fund">
+          <label for="fmpKeyInput">Fundamentals data (for Business Quality &amp; Value)</label>
+          <p class="menu-fund-note">Optional. Paste a <b>free</b> Financial Modeling Prep API key to enable
+            company profitability, margins, competition &amp; valuation scoring.
+            <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">Get a free key →</a></p>
+          <div class="fund-key-row">
+            <input id="fmpKeyInput" type="password" placeholder="API key" autocomplete="off" spellcheck="false" />
+            <button id="saveKeyBtn" class="btn-ghost">Save</button>
+          </div>
+          <div id="fmpKeyMsg" class="fund-key-msg"></div>
         </div>
       </div>
     </div>
@@ -572,6 +626,11 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
               <div id="breakdown"></div>
               <div id="adxNote" class="adx-note"></div>
               <div id="blendNote" class="blend-note"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="valueCard">
+              <h2>🏛️ Business quality &amp; value</h2>
+              <div id="valueContent"></div>
             </div>
           </div>
 
@@ -1324,6 +1383,227 @@ function value(p, prices) {
 const STARTING_CASH = START_CASH;
 
 
+// valuation.js — fundamental "quality & value" scoring for stocks.
+// Turns a normalized fundamentals object into five 1–100 scores, an overall
+// score, a letter rating, and a peer-relative standing. Pure functions — no I/O.
+//
+// The five lenses (from the product spec):
+//   1. Profitability  — does it actually make money? (net profit margin)
+//   2. Competition    — where it ranks vs industry peers
+//   3. "Real" money   — quality of profit (gross margin)
+//   4. Survival       — can it weather a bad bear market? (balance sheet + beta)
+//   5. Valuation      — are you overpaying? (P/E vs a reasonable P/E → fair price)
+
+function vclamp(v, lo = 1, hi = 100) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// Piecewise-linear map: points = [[x0,y0],[x1,y1],...] sorted by x.
+function interp(x, points) {
+  if (x <= points[0][0]) return points[0][1];
+  if (x >= points[points.length - 1][0]) return points[points.length - 1][1];
+  for (let i = 1; i < points.length; i++) {
+    if (x <= points[i][0]) {
+      const [x0, y0] = points[i - 1];
+      const [x1, y1] = points[i];
+      return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+    }
+  }
+  return points[points.length - 1][1];
+}
+
+// 1. Profitability — net profit margin as a percentage (e.g. 25 = 25%).
+function scoreProfitability(netMarginPct) {
+  if (netMarginPct == null || Number.isNaN(netMarginPct)) return null;
+  return Math.round(
+    vclamp(interp(netMarginPct, [[-25, 1], [-5, 12], [0, 28], [5, 55], [10, 70], [20, 88], [35, 100]]))
+  );
+}
+
+// 3. "Is the money real" — gross margin as a percentage.
+function scoreGrossMargin(grossMarginPct) {
+  if (grossMarginPct == null || Number.isNaN(grossMarginPct)) return null;
+  return Math.round(
+    vclamp(interp(grossMarginPct, [[5, 8], [20, 32], [35, 55], [50, 72], [65, 88], [80, 100]]))
+  );
+}
+
+// 4. Bear-market survival — balance-sheet resilience. Inputs (any may be null):
+//   debtToEquity (ratio, e.g. 1.5), currentRatio, netMarginPct, fcfPositive, beta.
+function scoreSurvival(f) {
+  const parts = [];
+  const weights = [];
+  if (f.debtToEquity != null) {
+    parts.push(interp(f.debtToEquity, [[0, 100], [0.5, 88], [1, 68], [2, 42], [3, 22], [5, 6]]));
+    weights.push(0.3);
+  }
+  if (f.currentRatio != null) {
+    parts.push(interp(f.currentRatio, [[0.4, 8], [1, 45], [1.5, 75], [2, 90], [3, 100]]));
+    weights.push(0.25);
+  }
+  if (f.netMarginPct != null) {
+    parts.push(interp(f.netMarginPct, [[-20, 5], [0, 40], [10, 75], [20, 95]]));
+    weights.push(0.2);
+  }
+  if (f.beta != null) {
+    parts.push(interp(f.beta, [[0.4, 100], [0.8, 82], [1, 70], [1.5, 45], [2, 28], [3, 8]]));
+    weights.push(0.15);
+  }
+  if (f.fcfPositive != null) {
+    parts.push(f.fcfPositive ? 90 : 30);
+    weights.push(0.1);
+  }
+  if (!parts.length) return null;
+  const wsum = weights.reduce((a, b) => a + b, 0);
+  const score = parts.reduce((a, p, i) => a + p * weights[i], 0) / wsum;
+  return Math.round(vclamp(score));
+}
+
+// A "reasonable" P/E: anchored at ~16, nudged up for growth (capped), down for
+// no growth. Returns { fairPE, fairPrice }.
+function reasonablePE(f) {
+  const g = f.revenueGrowthPct == null ? 6 : f.revenueGrowthPct; // assume mid single digit if unknown
+  // ~1.6x growth premium on top of a 12 base, clamped to a sane band
+  let fairPE = vclamp(12 + g * 1.2, 8, 40);
+  const fairPrice = f.eps != null && f.eps > 0 ? fairPE * f.eps : null;
+  return { fairPE: Math.round(fairPE * 10) / 10, fairPrice };
+}
+
+// 5. Valuation — are you overpaying? Compares P/E to the reasonable P/E.
+function scoreValuation(f) {
+  const { fairPE, fairPrice } = reasonablePE(f);
+  if (f.pe == null || f.pe <= 0 || f.eps == null || f.eps <= 0) {
+    // no positive earnings to value on
+    return { score: 30, fairPE, fairPrice, note: "No positive earnings yet — can't value on P/E; judge on growth/story (higher risk)." };
+  }
+  const ratio = f.pe / fairPE; // >1 = pricier than fair
+  const score = Math.round(
+    vclamp(interp(ratio, [[0.5, 100], [0.75, 88], [1, 66], [1.3, 46], [1.6, 30], [2, 14], [3, 4]]))
+  );
+  const overOrUnder = ratio > 1.15 ? "overvalued" : ratio < 0.85 ? "undervalued" : "roughly fair";
+  const note =
+    `P/E ${f.pe.toFixed(1)} vs a reasonable ~${fairPE} → ${overOrUnder}.` +
+    (fairPrice ? ` Fair value ≈ $${fairPrice.toFixed(2)} (price $${f.price != null ? f.price.toFixed(2) : "?"}).` : "");
+  return { score, fairPE, fairPrice, ratio, note };
+}
+
+// 2. Competition — rank the target within its peer group. peers: array of
+// { symbol, marketCap, netMarginPct, grossMarginPct, revenue }. Returns
+// { score, rank, of, note } or null if peers unavailable.
+function scoreCompetition(target, peers) {
+  const group = [target, ...(peers || [])].filter((p) => p && (p.marketCap != null || p.revenue != null));
+  if (group.length < 2) return null;
+  const z = (arr) => {
+    const vals = arr.filter((v) => v != null);
+    if (!vals.length) return () => 0;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length) || 1;
+    return (v) => (v == null ? 0 : (v - mean) / sd);
+  };
+  // Use ONE consistent scale metric across the whole group: revenue if every
+  // member has it, otherwise market cap for all (peers often only carry cap).
+  const useRevenue = group.every((p) => p.revenue != null);
+  const scaleOf = (p) => {
+    const v = useRevenue ? p.revenue : p.marketCap;
+    return v != null ? Math.log(Math.max(1, v)) : null;
+  };
+  const zScale = z(group.map(scaleOf));
+  const zNet = z(group.map((p) => p.netMarginPct));
+  const zGross = z(group.map((p) => p.grossMarginPct));
+  const strength = (p) => zScale(scaleOf(p)) * 1.0 + zNet(p.netMarginPct) * 0.8 + zGross(p.grossMarginPct) * 0.5;
+  const ranked = group
+    .map((p) => ({ symbol: p.symbol, s: strength(p) }))
+    .sort((a, b) => b.s - a.s);
+  const rank = ranked.findIndex((r) => r.symbol === target.symbol) + 1;
+  const of = ranked.length;
+  const percentile = (of - rank) / (of - 1); // 1 = best
+  const score = Math.round(vclamp(15 + percentile * 85));
+  const leader = ranked[0].symbol;
+  const note =
+    rank === 1
+      ? `Ranks #1 of ${of} vs peers (${peers.map((p) => p.symbol).join(", ")}) — the leader by scale & margins.`
+      : `Ranks #${rank} of ${of} in its peer group (leader: ${leader}).`;
+  return { score, rank, of, note };
+}
+
+// Letter rating from an overall 1–100.
+function letterRating(score) {
+  if (score >= 90) return "A+";
+  if (score >= 82) return "A";
+  if (score >= 74) return "B+";
+  if (score >= 66) return "B";
+  if (score >= 58) return "C+";
+  if (score >= 50) return "C";
+  if (score >= 40) return "D";
+  return "F";
+}
+
+// Combine everything. `f` is the normalized fundamentals; `competition` is the
+// result of scoreCompetition (may be null). Returns the full scorecard.
+function buildScorecard(f, competition) {
+  const profitability = scoreProfitability(f.netMarginPct);
+  const grossMargin = scoreGrossMargin(f.grossMarginPct);
+  const survival = scoreSurvival(f);
+  const valuation = scoreValuation(f);
+  const comp = competition || null;
+
+  const parts = [
+    { key: "profitability", label: "Profitability", score: profitability, hint: f.netMarginPct != null ? `Net margin ${f.netMarginPct.toFixed(1)}%` : "No margin data" },
+    { key: "competition", label: "Competitive position", score: comp ? comp.score : null, hint: comp ? comp.note : "No peer data" },
+    { key: "grossMargin", label: "Quality of profit", score: grossMargin, hint: f.grossMarginPct != null ? `Gross margin ${f.grossMarginPct.toFixed(1)}%` : "No margin data" },
+    { key: "survival", label: "Bear-market survival", score: survival, hint: survivalHint(f) },
+    { key: "valuation", label: "Valuation (are you overpaying?)", score: valuation.score, hint: valuation.note },
+  ];
+  const present = parts.filter((p) => p.score != null);
+  const overall = present.length ? Math.round(present.reduce((a, p) => a + p.score, 0) / present.length) : null;
+  return {
+    parts,
+    overall,
+    rating: overall != null ? letterRating(overall) : "—",
+    valuation,
+    makesMoney: f.netMarginPct != null ? f.netMarginPct > 0 : null,
+  };
+}
+
+function survivalHint(f) {
+  const bits = [];
+  if (f.debtToEquity != null) bits.push(`D/E ${f.debtToEquity.toFixed(2)}`);
+  if (f.currentRatio != null) bits.push(`current ratio ${f.currentRatio.toFixed(2)}`);
+  if (f.beta != null) bits.push(`beta ${f.beta.toFixed(2)}`);
+  return bits.length ? bits.join(" · ") : "Limited balance-sheet data";
+}
+
+// Curated peer groups so competition works out-of-the-box for major names.
+const INDUSTRY_PEERS = {
+  NVDA: ["AMD", "INTC", "AVGO", "QCOM"],
+  AMD: ["NVDA", "INTC", "AVGO", "QCOM"],
+  INTC: ["NVDA", "AMD", "AVGO", "TXN"],
+  AVGO: ["NVDA", "AMD", "QCOM", "TXN"],
+  AAPL: ["MSFT", "GOOGL", "SAMSUNG", "DELL"],
+  MSFT: ["AAPL", "GOOGL", "AMZN", "ORCL"],
+  GOOGL: ["META", "MSFT", "AMZN", "AAPL"],
+  META: ["GOOGL", "SNAP", "PINS", "MSFT"],
+  AMZN: ["MSFT", "GOOGL", "WMT", "BABA"],
+  TSLA: ["F", "GM", "TM", "RIVN"],
+  F: ["GM", "TSLA", "TM", "STLA"],
+  GM: ["F", "TSLA", "TM", "STLA"],
+  JPM: ["BAC", "WFC", "C", "GS"],
+  BAC: ["JPM", "WFC", "C", "USB"],
+  KO: ["PEP", "MNST", "KDP"],
+  PEP: ["KO", "MDLZ", "KDP"],
+  V: ["MA", "AXP", "PYPL"],
+  MA: ["V", "AXP", "PYPL"],
+  DIS: ["NFLX", "WBD", "PARA", "CMCSA"],
+  NFLX: ["DIS", "WBD", "PARA", "AMZN"],
+  XOM: ["CVX", "COP", "SHEL", "BP"],
+  CVX: ["XOM", "COP", "SHEL", "BP"],
+  WMT: ["TGT", "COST", "AMZN"],
+  COST: ["WMT", "TGT", "BJ"],
+  JNJ: ["PFE", "MRK", "ABBV", "LLY"],
+  PFE: ["JNJ", "MRK", "ABBV", "LLY"],
+};
+
+
 // data.js
 // Fetches real OHLCV candles and fundamental metrics. Uses public, key-free,
 // CORS-enabled endpoints so the app runs from a static file with no backend.
@@ -1562,6 +1842,163 @@ async function fetchQuote(symbol) {
   const prev = candles.length > 1 ? candles[candles.length - 2].close : price;
   const changePct = prev ? ((price - prev) / prev) * 100 : 0;
   return { price, prevClose: prev, changePct, source: candles._source };
+}
+
+// ===== Fundamentals (for the Value & Quality scorecard) =====
+// Reliable fundamentals aren't available keyless anymore, so we use Financial
+// Modeling Prep (free API key) when present, and best-effort keyless Yahoo
+// quoteSummary via proxy otherwise. Returns a normalized object or null.
+const FMP = "https://financialmodelingprep.com/api/v3";
+const FMP_KEY_STORE = "signaldesk_fmp_key";
+
+function getFmpKey() {
+  try {
+    return localStorage.getItem(FMP_KEY_STORE) || "";
+  } catch {
+    return "";
+  }
+}
+function setFmpKey(k) {
+  try {
+    if (k && k.trim()) localStorage.setItem(FMP_KEY_STORE, k.trim());
+    else localStorage.removeItem(FMP_KEY_STORE);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function fmpGet(path, key) {
+  const url = `${FMP}${path}${path.includes("?") ? "&" : "?"}apikey=${encodeURIComponent(key)}`;
+  const res = await tfetch(url, 8000);
+  if (!res.ok) throw new Error("FMP " + res.status);
+  const j = await res.json();
+  if (j && j["Error Message"]) throw new Error(j["Error Message"]);
+  return j;
+}
+
+async function fetchFundamentalsFull(symbol) {
+  const key = getFmpKey();
+  if (key) {
+    try {
+      return await fromFMP(symbol, key);
+    } catch {
+      /* fall back to keyless Yahoo */
+    }
+  }
+  try {
+    return await fromYahooFundamentals(symbol);
+  } catch {
+    return null;
+  }
+}
+
+async function fromFMP(sym, key) {
+  const [prof, ratios, inc] = await Promise.all([
+    fmpGet(`/profile/${sym}`, key),
+    fmpGet(`/ratios-ttm/${sym}`, key),
+    fmpGet(`/income-statement/${sym}?period=annual&limit=2`, key),
+  ]);
+  const p = Array.isArray(prof) ? prof[0] : null;
+  const r = Array.isArray(ratios) ? ratios[0] : null;
+  const i0 = Array.isArray(inc) ? inc[0] : null;
+  const i1 = Array.isArray(inc) ? inc[1] : null;
+  if (!p && !r) throw new Error("no FMP data");
+  const revenue = i0 && i0.revenue != null ? +i0.revenue : null;
+  const revPrev = i1 && i1.revenue != null ? +i1.revenue : null;
+  const revenueGrowthPct = revenue && revPrev ? ((revenue - revPrev) / Math.abs(revPrev)) * 100 : null;
+  const netMarginPct = r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : revenue && i0 ? (i0.netIncome / revenue) * 100 : null;
+  const grossMarginPct = r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : revenue && i0 ? (i0.grossProfit / revenue) * 100 : null;
+  return {
+    symbol: sym,
+    name: p ? p.companyName : sym,
+    sector: p ? p.sector : null,
+    industry: p ? p.industry : null,
+    price: p && p.price != null ? +p.price : null,
+    marketCap: p && p.mktCap != null ? +p.mktCap : null,
+    beta: p && p.beta != null ? +p.beta : null,
+    eps: i0 && i0.eps != null ? +i0.eps : null,
+    pe: r && r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
+    grossMarginPct,
+    netMarginPct,
+    revenue,
+    revenueGrowthPct,
+    debtToEquity: r && r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
+    currentRatio: r && r.currentRatioTTM != null ? +r.currentRatioTTM : null,
+    fcfPositive: netMarginPct != null ? netMarginPct > 0 : null,
+    source: "Financial Modeling Prep",
+  };
+}
+
+async function fromYahooFundamentals(sym) {
+  const target = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+    sym
+  )}?modules=assetProfile,financialData,defaultKeyStatistics,summaryDetail,price`;
+  let json;
+  for (const wrap of YF_PROXIES) {
+    try {
+      const res = await tfetch(wrap(target), 6000);
+      if (!res.ok) continue;
+      json = await res.json();
+      if (json && json.quoteSummary) break;
+    } catch {
+      /* next proxy */
+    }
+  }
+  const r = json && json.quoteSummary && json.quoteSummary.result && json.quoteSummary.result[0];
+  if (!r) throw new Error("no Yahoo fundamentals");
+  const fd = r.financialData || {};
+  const ks = r.defaultKeyStatistics || {};
+  const sd = r.summaryDetail || {};
+  const pr = r.price || {};
+  const ap = r.assetProfile || {};
+  const num = (o) => (o && o.raw != null ? o.raw : null);
+  const d2e = num(fd.debtToEquity); // Yahoo reports as a percentage
+  return {
+    symbol: sym,
+    name: pr.longName || pr.shortName || sym,
+    sector: ap.sector || null,
+    industry: ap.industry || null,
+    price: num(pr.regularMarketPrice),
+    marketCap: num(pr.marketCap) || num(sd.marketCap),
+    beta: num(ks.beta),
+    eps: num(ks.trailingEps),
+    pe: num(sd.trailingPE),
+    grossMarginPct: num(fd.grossMargins) != null ? num(fd.grossMargins) * 100 : null,
+    netMarginPct: num(fd.profitMargins) != null ? num(fd.profitMargins) * 100 : null,
+    revenue: num(fd.totalRevenue),
+    revenueGrowthPct: num(fd.revenueGrowth) != null ? num(fd.revenueGrowth) * 100 : null,
+    debtToEquity: d2e != null ? d2e / 100 : null,
+    currentRatio: num(fd.currentRatio),
+    fcfPositive: num(fd.freeCashflow) != null ? num(fd.freeCashflow) > 0 : null,
+    source: "Yahoo Finance",
+  };
+}
+
+// Lightweight peer metrics for competitive ranking (2 calls per peer).
+async function fetchPeerMetrics(sym) {
+  const key = getFmpKey();
+  if (key) {
+    try {
+      const [prof, ratios] = await Promise.all([fmpGet(`/profile/${sym}`, key), fmpGet(`/ratios-ttm/${sym}`, key)]);
+      const p = Array.isArray(prof) ? prof[0] : null;
+      const r = Array.isArray(ratios) ? ratios[0] : null;
+      return {
+        symbol: sym,
+        marketCap: p && p.mktCap != null ? +p.mktCap : null,
+        netMarginPct: r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null,
+        grossMarginPct: r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null,
+        revenue: null,
+      };
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const f = await fromYahooFundamentals(sym);
+    return { symbol: sym, marketCap: f.marketCap, netMarginPct: f.netMarginPct, grossMarginPct: f.grossMarginPct, revenue: f.revenue };
+  } catch {
+    return null;
+  }
 }
 
 // Run an async fn over items with bounded concurrency (keeps proxy load sane).
@@ -2240,6 +2677,7 @@ function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
 
 
 
+
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
   {
@@ -2396,6 +2834,98 @@ async function run() {
     source.includes("Synthetic") ? "warn" : "ok"
   );
   $("analyzeBtn").disabled = false;
+
+  // Business quality & value (stocks only, Pro) — loads async, non-blocking.
+  loadValue(symbol, tier);
+}
+
+// ---------------- Value & Quality scorecard ----------------
+let valueReqId = 0;
+async function loadValue(symbol, tier) {
+  const card = $("valueCard");
+  if (!card) return;
+  if (!tier.fundamentals || assetType(symbol) !== "Stock") {
+    card.classList.add("hidden");
+    return;
+  }
+  const myReq = ++valueReqId;
+  card.classList.remove("hidden");
+  $("valueContent").innerHTML = `<p class="status loading">Loading business fundamentals for ${esc(symbol)}…</p>`;
+
+  const f = await fetchFundamentalsFull(symbol);
+  if (myReq !== valueReqId) return; // superseded by a newer analyze
+  if (!f || (f.netMarginPct == null && f.grossMarginPct == null && f.pe == null)) {
+    $("valueContent").innerHTML = noFundamentalsMsg();
+    return;
+  }
+
+  // competitive ranking against curated peers
+  let competition = null;
+  const peerSyms = (INDUSTRY_PEERS[symbol] || []).slice(0, 3);
+  if (peerSyms.length) {
+    const peers = (await mapLimit(peerSyms, 3, (s) => fetchPeerMetrics(s))).filter((x) => x && !x.error);
+    if (myReq !== valueReqId) return;
+    if (peers.length) {
+      competition = scoreCompetition(
+        { symbol, marketCap: f.marketCap, netMarginPct: f.netMarginPct, grossMarginPct: f.grossMarginPct, revenue: f.revenue },
+        peers
+      );
+    }
+  }
+
+  const card2 = buildScorecard(f, competition);
+  renderValue(f, card2);
+}
+
+function renderValue(f, card) {
+  const gradeTone = card.overall >= 66 ? "buy" : card.overall >= 50 ? "" : "sell";
+  const bars = card.parts
+    .map((p) => {
+      if (p.score == null)
+        return `<div class="val-row"><div class="val-head"><span>${esc(p.label)}</span><span class="val-na">n/a</span></div>
+          <div class="val-hint">${esc(p.hint)}</div></div>`;
+      const tone = p.score >= 66 ? "buy" : p.score >= 45 ? "hold" : "sell";
+      return `<div class="val-row">
+        <div class="val-head"><span>${esc(p.label)}</span><span class="val-score ${tone}">${p.score}</span></div>
+        <div class="val-bar"><span class="val-fill ${tone}" style="width:${p.score}%"></span></div>
+        <div class="val-hint">${esc(p.hint)}</div>
+      </div>`;
+    })
+    .join("");
+  const money =
+    card.makesMoney == null
+      ? ""
+      : card.makesMoney
+      ? `<span class="val-badge buy">Profitable</span>`
+      : `<span class="val-badge sell">Losing money</span>`;
+  $("valueContent").innerHTML = `
+    <div class="val-top">
+      <div class="val-grade ${gradeTone}">${card.rating}<span>${card.overall}/100</span></div>
+      <div class="val-meta">
+        <div class="val-name">${esc(f.name || f.symbol)} ${money}</div>
+        <div class="val-sub">${esc([f.sector, f.industry].filter(Boolean).join(" · ") || "—")}</div>
+        <div class="val-fair">${esc(card.valuation.note || "")}</div>
+      </div>
+    </div>
+    ${bars}
+    <p class="val-source">Fundamentals via ${esc(f.source || "provider")}. Educational scoring — not financial advice; verify figures before investing.</p>`;
+}
+
+function noFundamentalsMsg() {
+  const hasKey = !!getFmpKey();
+  return `<div class="val-empty">
+    <p><b>Fundamentals unavailable for this symbol.</b> ${
+      hasKey
+        ? "Your data key didn't return figures for this ticker (it may be an ETF/ADR/non-US listing)."
+        : "Quality & value scoring needs a fundamentals data source."
+    }</p>
+    ${
+      hasKey
+        ? ""
+        : `<p>Add a <b>free</b> Financial Modeling Prep API key (takes ~30 seconds) in the <b>☰ Account</b> menu → Fundamentals data. Get one at
+           <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>`
+    }
+  </div>`;
 }
 
 function setStatus(msg, cls) {
@@ -3587,7 +4117,16 @@ window.addEventListener("DOMContentLoaded", () => {
   const closeMenu = () => $("sideMenu").classList.add("hidden");
   $("menuBtn").addEventListener("click", () => {
     renderUserBar();
+    $("fmpKeyInput").value = getFmpKey();
+    $("fmpKeyMsg").textContent = getFmpKey() ? "Key saved — fundamentals enabled." : "";
     openMenu();
+  });
+  $("saveKeyBtn").addEventListener("click", () => {
+    setFmpKey($("fmpKeyInput").value);
+    $("fmpKeyMsg").textContent = getFmpKey()
+      ? "✓ Saved. Fundamentals enabled — re-run an analysis to see scores."
+      : "Key cleared.";
+    if (state.result) run();
   });
   $("menuClose").addEventListener("click", closeMenu);
   $("menuBackdrop").addEventListener("click", closeMenu);

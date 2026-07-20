@@ -9,7 +9,12 @@ import {
   searchSymbols,
   fetchQuote,
   mapLimit,
+  fetchFundamentalsFull,
+  fetchPeerMetrics,
+  getFmpKey,
+  setFmpKey,
 } from "./data.js";
+import { buildScorecard, scoreCompetition, INDUSTRY_PEERS } from "./valuation.js";
 import { TIERS, TIER_ORDER } from "./tiers.js";
 import * as auth from "./auth.js";
 import { fetchNews } from "./news.js";
@@ -172,6 +177,98 @@ async function run() {
     source.includes("Synthetic") ? "warn" : "ok"
   );
   $("analyzeBtn").disabled = false;
+
+  // Business quality & value (stocks only, Pro) — loads async, non-blocking.
+  loadValue(symbol, tier);
+}
+
+// ---------------- Value & Quality scorecard ----------------
+let valueReqId = 0;
+async function loadValue(symbol, tier) {
+  const card = $("valueCard");
+  if (!card) return;
+  if (!tier.fundamentals || assetType(symbol) !== "Stock") {
+    card.classList.add("hidden");
+    return;
+  }
+  const myReq = ++valueReqId;
+  card.classList.remove("hidden");
+  $("valueContent").innerHTML = `<p class="status loading">Loading business fundamentals for ${esc(symbol)}…</p>`;
+
+  const f = await fetchFundamentalsFull(symbol);
+  if (myReq !== valueReqId) return; // superseded by a newer analyze
+  if (!f || (f.netMarginPct == null && f.grossMarginPct == null && f.pe == null)) {
+    $("valueContent").innerHTML = noFundamentalsMsg();
+    return;
+  }
+
+  // competitive ranking against curated peers
+  let competition = null;
+  const peerSyms = (INDUSTRY_PEERS[symbol] || []).slice(0, 3);
+  if (peerSyms.length) {
+    const peers = (await mapLimit(peerSyms, 3, (s) => fetchPeerMetrics(s))).filter((x) => x && !x.error);
+    if (myReq !== valueReqId) return;
+    if (peers.length) {
+      competition = scoreCompetition(
+        { symbol, marketCap: f.marketCap, netMarginPct: f.netMarginPct, grossMarginPct: f.grossMarginPct, revenue: f.revenue },
+        peers
+      );
+    }
+  }
+
+  const card2 = buildScorecard(f, competition);
+  renderValue(f, card2);
+}
+
+function renderValue(f, card) {
+  const gradeTone = card.overall >= 66 ? "buy" : card.overall >= 50 ? "" : "sell";
+  const bars = card.parts
+    .map((p) => {
+      if (p.score == null)
+        return `<div class="val-row"><div class="val-head"><span>${esc(p.label)}</span><span class="val-na">n/a</span></div>
+          <div class="val-hint">${esc(p.hint)}</div></div>`;
+      const tone = p.score >= 66 ? "buy" : p.score >= 45 ? "hold" : "sell";
+      return `<div class="val-row">
+        <div class="val-head"><span>${esc(p.label)}</span><span class="val-score ${tone}">${p.score}</span></div>
+        <div class="val-bar"><span class="val-fill ${tone}" style="width:${p.score}%"></span></div>
+        <div class="val-hint">${esc(p.hint)}</div>
+      </div>`;
+    })
+    .join("");
+  const money =
+    card.makesMoney == null
+      ? ""
+      : card.makesMoney
+      ? `<span class="val-badge buy">Profitable</span>`
+      : `<span class="val-badge sell">Losing money</span>`;
+  $("valueContent").innerHTML = `
+    <div class="val-top">
+      <div class="val-grade ${gradeTone}">${card.rating}<span>${card.overall}/100</span></div>
+      <div class="val-meta">
+        <div class="val-name">${esc(f.name || f.symbol)} ${money}</div>
+        <div class="val-sub">${esc([f.sector, f.industry].filter(Boolean).join(" · ") || "—")}</div>
+        <div class="val-fair">${esc(card.valuation.note || "")}</div>
+      </div>
+    </div>
+    ${bars}
+    <p class="val-source">Fundamentals via ${esc(f.source || "provider")}. Educational scoring — not financial advice; verify figures before investing.</p>`;
+}
+
+function noFundamentalsMsg() {
+  const hasKey = !!getFmpKey();
+  return `<div class="val-empty">
+    <p><b>Fundamentals unavailable for this symbol.</b> ${
+      hasKey
+        ? "Your data key didn't return figures for this ticker (it may be an ETF/ADR/non-US listing)."
+        : "Quality & value scoring needs a fundamentals data source."
+    }</p>
+    ${
+      hasKey
+        ? ""
+        : `<p>Add a <b>free</b> Financial Modeling Prep API key (takes ~30 seconds) in the <b>☰ Account</b> menu → Fundamentals data. Get one at
+           <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>`
+    }
+  </div>`;
 }
 
 function setStatus(msg, cls) {
@@ -1363,7 +1460,16 @@ window.addEventListener("DOMContentLoaded", () => {
   const closeMenu = () => $("sideMenu").classList.add("hidden");
   $("menuBtn").addEventListener("click", () => {
     renderUserBar();
+    $("fmpKeyInput").value = getFmpKey();
+    $("fmpKeyMsg").textContent = getFmpKey() ? "Key saved — fundamentals enabled." : "";
     openMenu();
+  });
+  $("saveKeyBtn").addEventListener("click", () => {
+    setFmpKey($("fmpKeyInput").value);
+    $("fmpKeyMsg").textContent = getFmpKey()
+      ? "✓ Saved. Fundamentals enabled — re-run an analysis to see scores."
+      : "Key cleared.";
+    if (state.result) run();
   });
   $("menuClose").addEventListener("click", closeMenu);
   $("menuBackdrop").addEventListener("click", closeMenu);

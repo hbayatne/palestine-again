@@ -28,6 +28,12 @@ weighted score — always showing *why*, never a black box.
 - **Portfolio Doctor** — paste your real holdings or upload a broker CSV; it
   analyzes every position at live prices and returns Keep / Trim / Add calls,
   a diversification & concentration read, and quality "ideas to add".
+- **Business Quality & Value scorecard** (stocks) — five 1–100 lenses
+  (profitability, competitive rank vs peers, gross-margin quality, bear-market
+  survival, and valuation vs a reasonable P/E with a fair-value estimate),
+  averaged into an overall score and letter grade. Uses a free Financial
+  Modeling Prep API key (entered in the side menu), with a keyless Yahoo
+  fallback.
 
 ## What it does
 
