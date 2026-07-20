@@ -19,6 +19,7 @@ export const TIERS = {
     chart: true,
     screener: false,
     paperTrading: false,
+    doctor: false,
     perks: [
       "Buy / Sell / Hold signal",
       "3 core indicators",
@@ -48,6 +49,7 @@ export const TIERS = {
     chart: true,
     screener: true,
     paperTrading: false,
+    doctor: false,
     perks: [
       "Everything in Free, plus:",
       "6 indicators",
@@ -73,6 +75,7 @@ export const TIERS = {
     chart: true,
     screener: true,
     paperTrading: true,
+    doctor: true,
     perks: [
       "Everything in Lite, plus:",
       "Full 7-indicator suite + ADX trend gate",

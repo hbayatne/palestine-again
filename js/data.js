@@ -227,12 +227,33 @@ export async function searchSymbols(query) {
   return [];
 }
 
-// Latest price for a symbol (used by the paper-trading portfolio). Reuses the
-// full candle fetch and returns the most recent close.
+// Latest price for a symbol (used by paper trading + watchlists). Reuses the
+// full candle fetch and also returns the day-over-day change.
 export async function fetchQuote(symbol) {
   const candles = await fetchCandles(symbol, "1d", 60);
   if (!candles || !candles.length) throw new Error("no price");
-  return { price: candles[candles.length - 1].close, source: candles._source };
+  const price = candles[candles.length - 1].close;
+  const prev = candles.length > 1 ? candles[candles.length - 2].close : price;
+  const changePct = prev ? ((price - prev) / prev) * 100 : 0;
+  return { price, prevClose: prev, changePct, source: candles._source };
+}
+
+// Run an async fn over items with bounded concurrency (keeps proxy load sane).
+export async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      try {
+        results[idx] = await fn(items[idx], idx);
+      } catch (e) {
+        results[idx] = { error: e.message };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 function parseYahoo(json, agg, limit) {

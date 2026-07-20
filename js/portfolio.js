@@ -9,7 +9,32 @@ function keyFor(email) {
 }
 
 function fresh() {
-  return { cash: START_CASH, positions: {}, history: [], created: Date.now() };
+  return {
+    cash: START_CASH,
+    positions: {},
+    history: [],
+    equity: [{ ts: Date.now(), total: START_CASH }],
+    created: Date.now(),
+  };
+}
+
+// Record an equity-curve point (deduped to at most one per 5 minutes) so the
+// paper account has a performance history to chart.
+export function snapshot(email, total) {
+  const p = load(email);
+  if (!Array.isArray(p.equity)) p.equity = [];
+  const lastPt = p.equity[p.equity.length - 1];
+  const now = Date.now();
+  if (!lastPt || now - lastPt.ts > 5 * 60 * 1000) {
+    p.equity.push({ ts: now, total });
+    p.equity = p.equity.slice(-500);
+    save(email, p);
+  } else {
+    lastPt.total = total; // keep the latest value for the current bucket
+    lastPt.ts = now;
+    save(email, p);
+  }
+  return p.equity;
 }
 
 export function load(email) {

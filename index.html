@@ -49,6 +49,7 @@
         <button class="tab active" data-tab="analyze">📊 Analyze</button>
         <button class="tab" data-tab="screener" id="tabScreenerBtn">💰 Income &amp; Growth</button>
         <button class="tab" data-tab="paper" id="tabPaperBtn">🎮 Paper Trading</button>
+        <button class="tab" data-tab="doctor" id="tabDoctorBtn">🩺 Portfolio Doctor</button>
       </nav>
 
       <!-- ============ ANALYZE ============ -->
@@ -165,6 +166,11 @@
           <div class="pf-stat"><div class="l">Total P&amp;L</div><div id="pfPnl" class="n">—</div></div>
         </div>
 
+        <div class="card chart-card">
+          <h2>Portfolio performance</h2>
+          <canvas id="pfChart"></canvas>
+        </div>
+
         <div class="card trade-card">
           <h2>Place a simulated order</h2>
           <div class="trade-form">
@@ -200,6 +206,32 @@
             </table>
           </div>
         </div>
+      </section>
+
+      <!-- ============ PORTFOLIO DOCTOR ============ -->
+      <section id="tab-doctor" class="tabview hidden">
+        <p class="section-intro">Paste your real holdings (or upload a broker CSV) and get a <b>Keep / Trim / Add</b>
+          read on each position, plus diversification and concentration checks. It analyzes every holding at live
+          prices with the same signal engine. <b>Educational only — not financial advice.</b></p>
+
+        <div class="card">
+          <h2>Your holdings</h2>
+          <textarea id="holdingsInput" class="holdings-input" spellcheck="false" placeholder="One per line — ticker then optional shares or value. Examples:
+AAPL 50
+VOO 1200
+SCHD, 400
+BTC-USD 0.5
+
+…or paste a broker CSV with Symbol / Quantity / Market Value columns."></textarea>
+          <div class="doctor-actions">
+            <label class="btn-ghost file-btn">Upload CSV<input type="file" id="csvFile" accept=".csv,.txt" hidden /></label>
+            <button id="loadSampleBtn" class="btn-ghost">Load sample</button>
+            <button id="runDoctor" class="btn-buy">Analyze my portfolio</button>
+          </div>
+        </div>
+
+        <div id="doctorResults"></div>
+        <div id="doctorIdeas"></div>
       </section>
     </div>
   </div>

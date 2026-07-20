@@ -352,3 +352,36 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 .pf-table td.buy { color: var(--buy); }
 .pf-table td.sell { color: var(--sell); }
 .pf-table td.empty { text-align: center; color: var(--muted); font-family: inherit; padding: 22px; }
+
+/* ===== Watchlist price row ===== */
+.wl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.wl-price { font-size: 12px; font-family: ui-monospace, monospace; color: var(--muted); }
+.wl-price.buy { color: var(--buy); }
+.wl-price.sell { color: var(--sell); }
+
+/* ===== Performance chart ===== */
+#pfChart { width: 100%; height: 240px; display: block; }
+
+/* ===== Portfolio Doctor ===== */
+.holdings-input { width: 100%; min-height: 150px; resize: vertical; background: var(--panel2);
+  border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px;
+  font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.6; }
+.holdings-input:focus { border-color: var(--accent); outline: none; }
+.doctor-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+.file-btn { cursor: pointer; display: inline-flex; align-items: center; }
+.doc-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 4px 0 14px; }
+@media (max-width: 640px) { .doc-summary { grid-template-columns: repeat(2, 1fr); } }
+.doc-verdicts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.dv { font-size: 11px; font-weight: 700; letter-spacing: 0.03em; padding: 3px 10px; border-radius: 20px; }
+.dv-add { background: rgba(22,199,132,0.18); color: #4cd3a5; }
+.dv-keep { background: rgba(22,199,132,0.10); color: #6ad1ab; }
+.dv-hold { background: rgba(209,183,58,0.15); color: #e8d67a; }
+.dv-trim { background: rgba(226,55,68,0.12); color: #ef8e97; }
+.dv-sell { background: rgba(226,55,68,0.20); color: #f0616c; }
+.dv-n\/a { background: rgba(255,255,255,0.08); color: var(--muted); }
+.doc-note { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin: 6px 2px 20px; }
+.doc-reason { color: var(--muted); font-size: 12px; font-family: inherit; max-width: 340px; }
+#doctorResults .pf-stat .n.buy { color: var(--buy); }
+#doctorResults .pf-stat .n.sell { color: var(--sell); }
+#doctorIdeas { margin-top: 8px; }
+#doctorIdeas h2 { font-size: 15px; margin: 0 0 4px; }

@@ -23,7 +23,11 @@ weighted score — always showing *why*, never a black box.
 - **Income & Growth screener** — curated high-dividend, dividend-growth and
   long-term growth ETF/fund watchlists; click any holding to analyze it.
 - **Paper trading** — a simulated $100k portfolio that trades at real live
-  prices, with positions, unrealized P&L and trade history (stored per user).
+  prices, with positions, unrealized P&L, an equity-curve performance chart,
+  and trade history (stored per user).
+- **Portfolio Doctor** — paste your real holdings or upload a broker CSV; it
+  analyzes every position at live prices and returns Keep / Trim / Add calls,
+  a diversification & concentration read, and quality "ideas to add".
 
 ## What it does
 

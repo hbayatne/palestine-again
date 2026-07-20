@@ -1,5 +1,5 @@
 // app.js — UI controller: auth gate -> tier gating -> data -> signal -> render.
-import { analyze, combine, VOTER_KEYS } from "./signals.js";
+import { analyze, combine, VOTER_KEYS, recommend } from "./signals.js";
 import {
   fetchCandles,
   fetchFundamentals,
@@ -8,6 +8,7 @@ import {
   looksLikeCrypto,
   searchSymbols,
   fetchQuote,
+  mapLimit,
 } from "./data.js";
 import { TIERS, TIER_ORDER } from "./tiers.js";
 import * as auth from "./auth.js";
@@ -23,20 +24,41 @@ const PRESET_GROUPS = [
       { symbol: "BTCUSDT", cg: "bitcoin", label: "Bitcoin" },
       { symbol: "ETHUSDT", cg: "ethereum", label: "Ethereum" },
       { symbol: "SOLUSDT", cg: "solana", label: "Solana" },
+      { symbol: "BNBUSDT", cg: "binancecoin", label: "BNB" },
       { symbol: "XRPUSDT", cg: "ripple", label: "XRP" },
+      { symbol: "ADAUSDT", cg: "cardano", label: "Cardano" },
+      { symbol: "AVAXUSDT", cg: "avalanche-2", label: "Avalanche" },
       { symbol: "DOGEUSDT", cg: "dogecoin", label: "Dogecoin" },
+      { symbol: "LINKUSDT", cg: "chainlink", label: "Chainlink" },
+      { symbol: "MATICUSDT", cg: "matic-network", label: "Polygon" },
     ],
   },
   {
-    group: "Stocks & ETFs",
+    group: "Mega-cap Stocks",
     items: [
       { symbol: "AAPL", label: "Apple" },
-      { symbol: "TSLA", label: "Tesla" },
-      { symbol: "NVDA", label: "Nvidia" },
       { symbol: "MSFT", label: "Microsoft" },
+      { symbol: "NVDA", label: "Nvidia" },
       { symbol: "AMZN", label: "Amazon" },
-      { symbol: "SPY", label: "S&P 500 ETF" },
-      { symbol: "QQQ", label: "Nasdaq 100 ETF" },
+      { symbol: "GOOGL", label: "Alphabet" },
+      { symbol: "META", label: "Meta" },
+      { symbol: "TSLA", label: "Tesla" },
+      { symbol: "AVGO", label: "Broadcom" },
+      { symbol: "JPM", label: "JPMorgan" },
+      { symbol: "BRK-B", label: "Berkshire" },
+    ],
+  },
+  {
+    group: "Popular ETFs",
+    items: [
+      { symbol: "SPY", label: "S&P 500 (SPY)" },
+      { symbol: "VOO", label: "Vanguard S&P 500" },
+      { symbol: "QQQ", label: "Nasdaq 100" },
+      { symbol: "VTI", label: "Total US Market" },
+      { symbol: "SCHD", label: "Schwab Dividend" },
+      { symbol: "JEPI", label: "JPM Premium Income" },
+      { symbol: "SMH", label: "Semiconductors" },
+      { symbol: "IWM", label: "Russell 2000" },
     ],
   },
   {
@@ -45,16 +67,28 @@ const PRESET_GROUPS = [
       { symbol: "EURUSD=X", label: "EUR / USD" },
       { symbol: "GBPUSD=X", label: "GBP / USD" },
       { symbol: "USDJPY=X", label: "USD / JPY" },
+      { symbol: "AUDUSD=X", label: "AUD / USD" },
+      { symbol: "USDCAD=X", label: "USD / CAD" },
     ],
   },
   {
     group: "Commodities & Indices",
     items: [
       { symbol: "GC=F", label: "Gold" },
+      { symbol: "SI=F", label: "Silver" },
       { symbol: "CL=F", label: "Crude Oil" },
+      { symbol: "NG=F", label: "Natural Gas" },
       { symbol: "^GSPC", label: "S&P 500 Index" },
+      { symbol: "^IXIC", label: "Nasdaq Composite" },
+      { symbol: "^DJI", label: "Dow Jones" },
+      { symbol: "^VIX", label: "Volatility (VIX)" },
     ],
   },
+];
+
+// Candidate "ideas to add" for the Portfolio Doctor — quality, liquid names.
+const ADD_CANDIDATES = [
+  "VOO", "VTI", "SCHD", "QQQ", "NVDA", "MSFT", "AAPL", "AVGO", "JEPI", "SMH", "GC=F", "BTCUSDT",
 ];
 const ALL_PRESETS = PRESET_GROUPS.flatMap((g) => g.items);
 
@@ -647,11 +681,279 @@ function submitAuth(e) {
   initNews();
 }
 
+// Equity-curve line chart for the paper portfolio.
+function drawEquityChart(equity) {
+  const canvas = $("pfChart");
+  if (!canvas || canvas.clientWidth === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  const pts = (equity || []).filter((p) => p && Number.isFinite(p.total));
+  if (pts.length < 2) {
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "12px system-ui";
+    ctx.fillText("Make a few trades / revisits to build your performance curve.", 12, H / 2);
+    return;
+  }
+  const base = portfolio.STARTING_CASH;
+  const vals = pts.map((p) => p.total).concat(base);
+  let min = Math.min(...vals);
+  let max = Math.max(...vals);
+  const pad = (max - min) * 0.1 || max * 0.02;
+  min -= pad;
+  max += pad;
+  const padL = 8;
+  const padR = 62;
+  const x = (i) => padL + (i / (pts.length - 1)) * (W - padL - padR);
+  const y = (val) => 10 + (1 - (val - min) / (max - min)) * (H - 26);
+
+  // baseline (starting cash)
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(padL, y(base));
+  ctx.lineTo(W - padR, y(base));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.font = "10px ui-monospace, monospace";
+  ctx.fillText("$" + fmt(base), W - padR + 4, y(base));
+
+  const up = pts[pts.length - 1].total >= base;
+  const color = up ? "#16c784" : "#e23744";
+  // area fill
+  const grad = ctx.createLinearGradient(0, 10, 0, H);
+  grad.addColorStop(0, up ? "rgba(22,199,132,0.25)" : "rgba(226,55,68,0.25)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.beginPath();
+  ctx.moveTo(x(0), y(pts[0].total));
+  pts.forEach((p, i) => ctx.lineTo(x(i), y(p.total)));
+  ctx.lineTo(x(pts.length - 1), H);
+  ctx.lineTo(x(0), H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  // line
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  pts.forEach((p, i) => (i ? ctx.lineTo(x(i), y(p.total)) : ctx.moveTo(x(i), y(p.total))));
+  ctx.stroke();
+  // last value label
+  ctx.fillStyle = color;
+  ctx.font = "11px ui-monospace, monospace";
+  ctx.fillText("$" + fmt(pts[pts.length - 1].total), W - padR + 4, y(pts[pts.length - 1].total));
+}
+
+// ---------------- Portfolio Doctor ----------------
+// Parse pasted / CSV holdings into [{symbol, shares, value}]. Flexible: accepts
+// "AAPL 50", "AAPL,50", broker CSVs with Symbol/Quantity/Market-Value columns.
+function parseHoldings(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  // Detect a header row for CSV column mapping.
+  let symCol = -1, qtyCol = -1, valCol = -1, startIdx = 0;
+  const headCells = lines[0].split(/[,\t]/).map((c) => c.trim().toLowerCase());
+  if (headCells.some((c) => /symbol|ticker/.test(c))) {
+    headCells.forEach((c, i) => {
+      if (symCol < 0 && /symbol|ticker/.test(c)) symCol = i;
+      if (qtyCol < 0 && /quantity|shares|qty|units/.test(c)) qtyCol = i;
+      if (valCol < 0 && /market ?value|value|amount|balance/.test(c)) valCol = i;
+    });
+    startIdx = 1;
+  }
+  const out = [];
+  for (let i = startIdx; i < lines.length; i++) {
+    const cells = lines[i].split(/[,\t]/).map((c) => c.trim());
+    let symbol, shares, value;
+    if (symCol >= 0) {
+      symbol = cells[symCol];
+      shares = qtyCol >= 0 ? parseNum(cells[qtyCol]) : null;
+      value = valCol >= 0 ? parseNum(cells[valCol]) : null;
+    } else {
+      // free-form: first token that looks like a ticker, then up to two numbers
+      const tokens = lines[i].split(/[\s,]+/).filter(Boolean);
+      symbol = tokens.find((t) => /^[\^]?[A-Za-z][A-Za-z0-9.\-=]{0,9}$/.test(t));
+      const nums = tokens.map(parseNum).filter((n) => n != null);
+      shares = nums[0] ?? null;
+      value = nums[1] ?? null;
+    }
+    if (!symbol) continue;
+    symbol = symbol.toUpperCase().replace(/[^A-Z0-9.\-=^]/g, "");
+    if (!symbol) continue;
+    out.push({ symbol, shares, value });
+  }
+  // merge duplicates
+  const merged = {};
+  for (const h of out) {
+    if (!merged[h.symbol]) merged[h.symbol] = { symbol: h.symbol, shares: 0, value: 0, hasShares: false, hasValue: false };
+    if (h.shares != null) { merged[h.symbol].shares += h.shares; merged[h.symbol].hasShares = true; }
+    if (h.value != null) { merged[h.symbol].value += h.value; merged[h.symbol].hasValue = true; }
+  }
+  return Object.values(merged);
+}
+function parseNum(s) {
+  if (s == null) return null;
+  const n = parseFloat(String(s).replace(/[$,%\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function assetType(symbol) {
+  if (looksLikeCrypto(symbol) || /-USD$/.test(symbol)) return "Crypto";
+  if (/=X$/.test(symbol)) return "Forex";
+  if (/=F$/.test(symbol)) return "Commodity";
+  if (/^\^/.test(symbol)) return "Index";
+  const etfs = new Set(WATCHLISTS.flatMap((w) => (w.id.includes("growth") || w.id.includes("dividend") ? w.items.map((i) => i.symbol) : [])));
+  if (etfs.has(symbol) || /ETF/i.test(symbol)) return "ETF/Fund";
+  return "Stock";
+}
+
+let doctorBusy = false;
+async function runDoctor() {
+  if (doctorBusy) return;
+  const text = $("holdingsInput").value;
+  const holdings = parseHoldings(text);
+  const out = $("doctorResults");
+  if (!holdings.length) {
+    out.innerHTML = `<p class="section-intro">Paste your holdings above (one per line, e.g. <code>AAPL 50</code>) or upload a CSV, then click Analyze.</p>`;
+    return;
+  }
+  doctorBusy = true;
+  $("runDoctor").disabled = true;
+  out.innerHTML = `<p class="status loading">Analyzing ${holdings.length} holdings at live prices…</p>`;
+
+  // Fetch + analyze each holding
+  const rows = await mapLimit(holdings, 4, async (h) => {
+    try {
+      const candles = await fetchCandles(h.symbol, "1d", 400);
+      const res = analyze(candles);
+      const price = res.price;
+      const value = h.hasValue ? h.value : h.hasShares ? h.shares * price : null;
+      return { ...h, price, value, score: res.score, action: res.action, ok: true };
+    } catch (e) {
+      return { ...h, ok: false, error: e.message };
+    }
+  });
+
+  const valued = rows.filter((r) => r.ok && r.value != null);
+  const totalValue = valued.reduce((s, r) => s + r.value, 0);
+  // equal-weight fallback if no values supplied
+  const okRows = rows.filter((r) => r.ok);
+  const weightOf = (r) =>
+    totalValue > 0 && r.value != null ? r.value / totalValue : okRows.length ? 1 / okRows.length : null;
+
+  const analyzed = rows.map((r) => {
+    if (!r.ok) return { ...r, weight: null, rec: { verdict: "N/A", tone: "neutral", reason: "Couldn't fetch data for this symbol — check the ticker." } };
+    const weight = weightOf(r);
+    return { ...r, weight, type: assetType(r.symbol), rec: recommend(r.score, weight) };
+  });
+  analyzed.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+
+  renderDoctor(analyzed, totalValue);
+
+  // Ideas to add: strong-signal candidates not already held
+  const held = new Set(okRows.map((r) => r.symbol));
+  const candidates = ADD_CANDIDATES.filter((c) => !held.has(c)).slice(0, 8);
+  const ideas = await mapLimit(candidates, 4, async (sym) => {
+    try {
+      const res = analyze(await fetchCandles(sym, "1d", 400));
+      return { symbol: sym, score: res.score, action: res.action };
+    } catch {
+      return null;
+    }
+  });
+  renderIdeas(ideas.filter((x) => x && x.score >= 18).sort((a, b) => b.score - a.score).slice(0, 5));
+
+  doctorBusy = false;
+  $("runDoctor").disabled = false;
+}
+
+function renderDoctor(rows, totalValue) {
+  const counts = { ADD: 0, KEEP: 0, HOLD: 0, TRIM: 0, SELL: 0 };
+  rows.forEach((r) => { if (counts[r.rec.verdict] != null) counts[r.rec.verdict]++; });
+  const types = {};
+  rows.forEach((r) => { if (r.ok) types[r.type] = (types[r.type] || 0) + (r.weight || 0); });
+  const topWeight = rows.length && rows[0].weight != null ? rows[0].weight : 0;
+  const hhi = rows.reduce((s, r) => s + (r.weight ? r.weight * r.weight : 0), 0);
+  const divScore = Math.max(0, Math.round((1 - hhi) * 100)); // 100 = well spread
+
+  const summary = `
+    <div class="doc-summary">
+      <div class="pf-stat"><div class="l">Holdings</div><div class="n">${rows.length}</div></div>
+      <div class="pf-stat"><div class="l">Est. value</div><div class="n">${totalValue > 0 ? "$" + fmt(totalValue) : "—"}</div></div>
+      <div class="pf-stat"><div class="l">Diversification</div><div class="n ${divScore >= 60 ? "buy" : divScore >= 40 ? "" : "sell"}">${divScore}/100</div></div>
+      <div class="pf-stat"><div class="l">Top position</div><div class="n ${topWeight > 0.25 ? "sell" : ""}">${topWeight ? (topWeight * 100).toFixed(0) + "%" : "—"}</div></div>
+    </div>
+    <div class="doc-verdicts">
+      ${["ADD", "KEEP", "HOLD", "TRIM", "SELL"].map((k) => `<span class="dv dv-${k.toLowerCase()}">${counts[k]} ${k}</span>`).join("")}
+    </div>
+    <p class="doc-note">${diversificationNote(types, topWeight, divScore)}</p>`;
+
+  const table = `
+    <div class="table-wrap"><table class="pf-table">
+      <thead><tr><th>Symbol</th><th>Type</th><th>Weight</th><th>Price</th><th>Signal</th><th>Action</th><th>Why</th></tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr>
+          <td><b>${esc(r.symbol)}</b></td>
+          <td>${r.ok ? esc(r.type) : "—"}</td>
+          <td>${r.weight != null ? (r.weight * 100).toFixed(1) + "%" : "—"}</td>
+          <td>${r.ok ? "$" + fmt(r.price) : "—"}</td>
+          <td>${r.ok ? (r.score >= 0 ? "+" : "") + r.score : "—"}</td>
+          <td><span class="dv dv-${r.rec.verdict.toLowerCase()}">${r.rec.verdict}</span></td>
+          <td class="doc-reason">${esc(r.rec.reason)}</td>
+        </tr>`).join("")}</tbody>
+    </table></div>`;
+
+  $("doctorResults").innerHTML = summary + table;
+}
+
+function diversificationNote(types, topWeight, divScore) {
+  const parts = [];
+  const mix = Object.entries(types).sort((a, b) => b[1] - a[1]).map(([t, w]) => `${t} ${(w * 100).toFixed(0)}%`);
+  if (mix.length) parts.push("Mix: " + mix.join(" · ") + ".");
+  if (topWeight > 0.25) parts.push(`Your largest position is ${(topWeight * 100).toFixed(0)}% of the book — that's concentrated; consider trimming toward ≤20%.`);
+  if (divScore < 40) parts.push("Overall this portfolio is concentrated — spreading across more positions/asset types would lower single-name risk.");
+  else if (divScore >= 60) parts.push("Diversification looks reasonable.");
+  parts.push("Recommendations blend each holding's technical signal with its weight — not financial advice.");
+  return parts.join(" ");
+}
+
+function renderIdeas(ideas) {
+  const el = $("doctorIdeas");
+  if (!ideas.length) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = `
+    <h2>💡 Ideas to consider adding</h2>
+    <p class="section-intro">Quality, liquid names you don't already hold that currently show a constructive signal. Click to analyze.</p>
+    <div class="wl-grid">
+      ${ideas.map((it) => `<button class="wl-item" data-sym="${esc(it.symbol)}">
+        <span class="wl-row"><span class="wl-sym">${esc(it.symbol)}</span>
+        <span class="wl-price buy">+${it.score}</span></span>
+        <span class="wl-note">${esc(it.action)}</span>
+      </button>`).join("")}
+    </div>`;
+  el.querySelectorAll(".wl-item").forEach((b) => {
+    b.onclick = () => {
+      $("symbol").value = b.dataset.sym;
+      switchTab("analyze");
+      run();
+    };
+  });
+}
+
 // ---------------- Tabs ----------------
 function switchTab(name) {
   const tier = currentTier();
   if (name === "screener" && !tier.screener) return openPricing();
   if (name === "paper" && !tier.paperTrading) return openPricing();
+  if (name === "doctor" && !tier.doctor) return openPricing();
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tabview").forEach((v) => v.classList.add("hidden"));
   $("tab-" + name).classList.remove("hidden");
@@ -663,10 +965,16 @@ function refreshTabLocks() {
   const tier = currentTier();
   $("tabScreenerBtn").textContent = (tier.screener ? "💰" : "🔒") + " Income & Growth";
   $("tabPaperBtn").textContent = (tier.paperTrading ? "🎮" : "🔒") + " Paper Trading";
+  $("tabDoctorBtn").textContent = (tier.doctor ? "🩺" : "🔒") + " Portfolio Doctor";
   const active = document.querySelector(".tab.active");
   if (active) {
     const t = active.dataset.tab;
-    if ((t === "screener" && !tier.screener) || (t === "paper" && !tier.paperTrading)) switchTab("analyze");
+    if (
+      (t === "screener" && !tier.screener) ||
+      (t === "paper" && !tier.paperTrading) ||
+      (t === "doctor" && !tier.doctor)
+    )
+      switchTab("analyze");
   }
 }
 
@@ -722,6 +1030,7 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
   );
 }
+let screenerPriced = false;
 function renderScreener() {
   const el = $("screenerContent");
   el.innerHTML = WATCHLISTS.map(
@@ -732,7 +1041,8 @@ function renderScreener() {
         ${w.items
           .map(
             (it) => `<button class="wl-item" data-sym="${esc(it.symbol)}">
-            <span class="wl-sym">${esc(it.symbol)}</span>
+            <span class="wl-row"><span class="wl-sym">${esc(it.symbol)}</span>
+              <span class="wl-price" data-sym="${esc(it.symbol)}">…</span></span>
             <span class="wl-name">${esc(it.name)}</span>
             <span class="wl-note">${esc(it.note || "")}</span>
           </button>`
@@ -748,6 +1058,32 @@ function renderScreener() {
       run();
     };
   });
+  if (!screenerPriced) {
+    screenerPriced = true;
+    loadScreenerPrices();
+  }
+}
+
+async function loadScreenerPrices() {
+  const symbols = [...new Set(WATCHLISTS.flatMap((w) => w.items.map((i) => i.symbol)))];
+  await mapLimit(symbols, 5, async (sym) => {
+    let q;
+    try {
+      q = await fetchQuote(sym);
+    } catch {
+      document.querySelectorAll(`.wl-price[data-sym="${cssEsc(sym)}"]`).forEach((e) => (e.textContent = ""));
+      return;
+    }
+    const cls = q.changePct >= 0 ? "buy" : "sell";
+    const txt = `$${fmt(q.price)} ${q.changePct >= 0 ? "▲" : "▼"}${Math.abs(q.changePct).toFixed(1)}%`;
+    document.querySelectorAll(`.wl-price[data-sym="${cssEsc(sym)}"]`).forEach((e) => {
+      e.textContent = txt;
+      e.className = "wl-price " + cls;
+    });
+  });
+}
+function cssEsc(s) {
+  return String(s).replace(/["\\]/g, "\\$&");
 }
 
 // ---------------- Paper trading ----------------
@@ -782,6 +1118,16 @@ async function renderPaper() {
     fmt(Math.abs(v.totalPnl)) +
     ` (${v.totalPnlPct >= 0 ? "+" : ""}${v.totalPnlPct.toFixed(2)}%)`;
   pnl.className = "n " + (v.totalPnl >= 0 ? "buy" : "sell");
+
+  // record + draw the equity curve
+  const equity = portfolio.snapshot(email, v.total);
+  requestAnimationFrame(() => {
+    try {
+      drawEquityChart(equity);
+    } catch (e) {
+      console.error("equity chart failed:", e);
+    }
+  });
 
   $("positionsBody").innerHTML = v.rows.length
     ? v.rows
@@ -881,6 +1227,15 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   window.addEventListener("resize", () => {
     if (state.result) scheduleChart(state.candles, state.result.indicators);
+    const paperVisible = !$("tab-paper").classList.contains("hidden");
+    if (paperVisible) {
+      const eq = portfolio.load(pfEmail()).equity;
+      requestAnimationFrame(() => {
+        try {
+          drawEquityChart(eq);
+        } catch {}
+      });
+    }
   });
 
   // tabs
@@ -901,6 +1256,21 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("tradeSymbol").addEventListener("keydown", (e) => {
     if (e.key === "Enter") doQuote();
+  });
+
+  // portfolio doctor
+  $("runDoctor").addEventListener("click", runDoctor);
+  $("csvFile").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      $("holdingsInput").value = String(reader.result || "");
+    };
+    reader.readAsText(file);
+  });
+  $("loadSampleBtn").addEventListener("click", () => {
+    $("holdingsInput").value = "AAPL 60\nNVDA 40\nMSFT 30\nVOO 25\nSCHD 200\nTSLA 50\nBTC-USD 0.4";
   });
 
   // header buttons

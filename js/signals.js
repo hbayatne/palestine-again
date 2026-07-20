@@ -345,6 +345,47 @@ function fmt(v) {
   return v.toPrecision(4);
 }
 
+// Portfolio recommendation for one holding, from its signal score and its
+// weight in the portfolio. Returns { verdict, tone, reason }.
+//   verdict ∈ ADD | KEEP | HOLD | TRIM | SELL
+export function recommend(score, weight) {
+  const w = weight == null ? null : weight;
+  const overweight = w != null && w > 0.25; // >25% of portfolio = concentration risk
+  let verdict, tone, reason;
+  if (score >= 45) {
+    verdict = "ADD";
+    tone = "buy";
+    reason = "Strong bullish signal — momentum and trend aligned.";
+  } else if (score >= 18) {
+    verdict = "KEEP";
+    tone = "buy";
+    reason = "Healthy signal — trend still constructive.";
+  } else if (score > -18) {
+    verdict = "HOLD";
+    tone = "neutral";
+    reason = "Mixed/neutral signal — no clear edge; watch it.";
+  } else if (score > -45) {
+    verdict = "TRIM";
+    tone = "sell";
+    reason = "Weakening signal — consider reducing exposure.";
+  } else {
+    verdict = "SELL";
+    tone = "sell";
+    reason = "Bearish signal — momentum and trend against you.";
+  }
+  if (overweight) {
+    // concentration overrides toward trimming, unless already SELL
+    if (verdict === "ADD" || verdict === "KEEP" || verdict === "HOLD") {
+      verdict = "TRIM";
+      tone = "sell";
+      reason = `Overweight at ${(w * 100).toFixed(0)}% of the book — trim to manage concentration risk.`;
+    } else {
+      reason += ` Also overweight at ${(w * 100).toFixed(0)}% — trim regardless.`;
+    }
+  }
+  return { verdict, tone, reason };
+}
+
 // Blend a fundamentals score (-100..100) with the technical score.
 export function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
   if (fundamentalScore == null) return technicalScore;
