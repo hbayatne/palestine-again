@@ -290,18 +290,20 @@ async function fromFMP(sym, key) {
   const [prof, ratios, inc] = await Promise.all([
     fmpGet(`/profile/${sym}`, key),
     fmpGet(`/ratios-ttm/${sym}`, key),
-    fmpGet(`/income-statement/${sym}?period=annual&limit=2`, key),
+    fmpGet(`/income-statement/${sym}?period=quarter&limit=6`, key),
   ]);
   const p = Array.isArray(prof) ? prof[0] : null;
   const r = Array.isArray(ratios) ? ratios[0] : null;
-  const i0 = Array.isArray(inc) ? inc[0] : null;
-  const i1 = Array.isArray(inc) ? inc[1] : null;
+  const q = Array.isArray(inc) ? inc : []; // newest first
   if (!p && !r) throw new Error("no FMP data");
-  const revenue = i0 && i0.revenue != null ? +i0.revenue : null;
-  const revPrev = i1 && i1.revenue != null ? +i1.revenue : null;
-  const revenueGrowthPct = revenue && revPrev ? ((revenue - revPrev) / Math.abs(revPrev)) * 100 : null;
-  const netMarginPct = r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : revenue && i0 ? (i0.netIncome / revenue) * 100 : null;
-  const grossMarginPct = r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : revenue && i0 ? (i0.grossProfit / revenue) * 100 : null;
+  const epsTrend = q.slice(0, 6).map((x) => +x.eps).reverse(); // oldest → newest
+  const epsTTM = q.slice(0, 4).reduce((s, x) => s + (+x.eps || 0), 0);
+  const revenueTTM = q.slice(0, 4).reduce((s, x) => s + (+x.revenue || 0), 0) || null;
+  // YoY revenue growth: most recent quarter vs the same quarter a year ago
+  const revenueGrowthPct =
+    q[0] && q[4] && q[4].revenue ? ((q[0].revenue - q[4].revenue) / Math.abs(q[4].revenue)) * 100 : null;
+  const netMarginPct = r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null;
+  const grossMarginPct = r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null;
   return {
     symbol: sym,
     name: p ? p.companyName : sym,
@@ -310,11 +312,12 @@ async function fromFMP(sym, key) {
     price: p && p.price != null ? +p.price : null,
     marketCap: p && p.mktCap != null ? +p.mktCap : null,
     beta: p && p.beta != null ? +p.beta : null,
-    eps: i0 && i0.eps != null ? +i0.eps : null,
+    eps: epsTTM || (q[0] && q[0].eps != null ? +q[0].eps : null),
+    epsTrend: epsTrend.length ? epsTrend : null,
     pe: r && r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
     grossMarginPct,
     netMarginPct,
-    revenue,
+    revenue: revenueTTM,
     revenueGrowthPct,
     debtToEquity: r && r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
     currentRatio: r && r.currentRatioTTM != null ? +r.currentRatioTTM : null,

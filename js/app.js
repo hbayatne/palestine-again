@@ -14,7 +14,7 @@ import {
   getFmpKey,
   setFmpKey,
 } from "./data.js";
-import { buildScorecard, scoreCompetition, INDUSTRY_PEERS } from "./valuation.js";
+import { buildScorecard, scoreCompetition, INDUSTRY_PEERS, buildRankerRow } from "./valuation.js";
 import { TIERS, TIER_ORDER } from "./tiers.js";
 import * as auth from "./auth.js";
 import { fetchNews } from "./news.js";
@@ -94,6 +94,13 @@ const PRESET_GROUPS = [
 // Candidate "ideas to add" for the Portfolio Doctor — quality, liquid names.
 const ADD_CANDIDATES = [
   "VOO", "VTI", "SCHD", "QQQ", "NVDA", "MSFT", "AAPL", "AVGO", "JEPI", "SMH", "GC=F", "BTCUSDT",
+];
+
+// Universe for the Stock Ranker — quality large caps across sectors.
+const RANKER_UNIVERSE = [
+  "AAPL", "MSFT", "NVDA", "GOOGL", "META", "AMZN", "AVGO", "ORCL", "ADBE", "CRM", "AMD", "QCOM",
+  "LLY", "UNH", "JNJ", "ABBV", "MRK", "JPM", "V", "MA", "COST", "WMT", "HD", "PG", "KO", "PEP",
+  "XOM", "CVX", "NFLX", "TSLA",
 ];
 const ALL_PRESETS = PRESET_GROUPS.flatMap((g) => g.items);
 
@@ -1062,17 +1069,224 @@ function renderIdeas(ideas) {
   });
 }
 
+// ---------------- Stock Ranker ----------------
+const RANKER_CACHE = "signaldesk_ranker_v2";
+let rankerRows = [];
+let rankerSort = { key: "overall", dir: -1 };
+let rankerBuilding = false;
+
+function readRankerCache() {
+  try {
+    return JSON.parse(localStorage.getItem(RANKER_CACHE));
+  } catch {
+    return null;
+  }
+}
+function writeRankerCache(rows) {
+  try {
+    localStorage.setItem(RANKER_CACHE, JSON.stringify({ ts: Date.now(), rows }));
+  } catch {
+    /* ignore */
+  }
+}
+
+async function renderRanker(force) {
+  const content = $("rankerContent");
+  if (!getFmpKey()) {
+    content.innerHTML = rankerNoKeyMsg();
+    $("rankerAsOf").textContent = "";
+    return;
+  }
+  const cache = readRankerCache();
+  if (cache && cache.rows && cache.rows.length && !force && Date.now() - cache.ts < 12 * 3600 * 1000) {
+    rankerRows = cache.rows;
+    $("rankerAsOf").textContent = "as of " + new Date(cache.ts).toLocaleString();
+    renderRankerTable();
+    return;
+  }
+  await buildRanker();
+}
+
+async function buildRanker() {
+  if (rankerBuilding) return;
+  rankerBuilding = true;
+  const content = $("rankerContent");
+  content.innerHTML = `<p class="status loading" id="rankerProgress">Scoring ${RANKER_UNIVERSE.length} companies (fundamentals + live signal)… first run only; cached for 12h.</p>`;
+  let done = 0;
+  const rows = (
+    await mapLimit(RANKER_UNIVERSE, 4, async (sym) => {
+      let f = null;
+      let tech = null;
+      try {
+        f = await fetchFundamentalsFull(sym);
+      } catch {
+        /* skip */
+      }
+      try {
+        tech = analyze(await fetchCandles(sym, "1d", 400)).score;
+      } catch {
+        /* no signal */
+      }
+      done++;
+      const pr = document.getElementById("rankerProgress");
+      if (pr) pr.textContent = `Scoring… ${done}/${RANKER_UNIVERSE.length}`;
+      if (!f || (f.netMarginPct == null && f.pe == null)) return null;
+      return buildRankerRow(f, tech);
+    })
+  ).filter(Boolean);
+  rows.sort((a, b) => (b.overall || 0) - (a.overall || 0));
+  rankerRows = rows;
+  writeRankerCache(rows);
+  $("rankerAsOf").textContent = "as of " + new Date().toLocaleString();
+  rankerBuilding = false;
+  if (!rows.length) {
+    content.innerHTML = `<p class="section-intro">No data returned — your API key may be rate-limited. Try again later.</p>`;
+    return;
+  }
+  renderRankerTable();
+}
+
+function signalChip(score) {
+  if (score == null) return `<span class="sig sig-na">—</span>`;
+  if (score >= 45) return `<span class="sig sig-sb">STRONG BUY</span>`;
+  if (score >= 18) return `<span class="sig sig-b">BUY</span>`;
+  if (score > -18) return `<span class="sig sig-h">HOLD</span>`;
+  if (score > -45) return `<span class="sig sig-s">SELL</span>`;
+  return `<span class="sig sig-ss">STRONG SELL</span>`;
+}
+function pillarCell(v) {
+  if (v == null) return `<td class="rk-na">—</td>`;
+  const tone = v >= 66 ? "buy" : v >= 45 ? "hold" : "sell";
+  return `<td class="rk-pill ${tone}">${v}</td>`;
+}
+function sparkline(vals) {
+  if (!vals || vals.length < 2) return "";
+  const w = 62;
+  const h = 20;
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const range = max - min || 1;
+  const bw = w / vals.length;
+  const up = vals[vals.length - 1] >= vals[0];
+  const color = up ? "#16c784" : "#e23744";
+  const bars = vals
+    .map((v, i) => {
+      const bh = Math.max(2, ((v - min) / range) * (h - 2));
+      const neg = v < 0;
+      return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" fill="${neg ? "#e23744" : color}" opacity="${neg ? 0.6 : 0.9}"/>`;
+    })
+    .join("");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${bars}</svg>`;
+}
+function fairValueCell(r) {
+  if (r.fairPrice == null || r.price == null) return `<td class="rk-na">—</td>`;
+  const diff = ((r.price - r.fairPrice) / r.fairPrice) * 100;
+  const tone = diff <= -5 ? "buy" : diff >= 15 ? "sell" : "";
+  const label = diff <= -10 ? "undervalued" : diff >= 15 ? "pricey" : "fair";
+  return `<td class="rk-fair ${tone}"><b>$${fmt(r.fairPrice)}</b><span>${label} (${diff >= 0 ? "+" : ""}${diff.toFixed(0)}%)</span></td>`;
+}
+
+function renderRankerTable() {
+  const content = $("rankerContent");
+  const q = ($("rankerSearch").value || "").trim().toLowerCase();
+  let rows = rankerRows.slice();
+  if (q) rows = rows.filter((r) => `${r.symbol} ${r.name || ""} ${r.sector || ""}`.toLowerCase().includes(q));
+  const { key, dir } = rankerSort;
+  const getv = (r) =>
+    key === "symbol" || key === "sector"
+      ? (r[key] || "").toString().toLowerCase()
+      : key.startsWith("pillar.")
+      ? r.pillars[key.split(".")[1]] ?? -1
+      : key === "signal"
+      ? r.techScore ?? -999
+      : key === "fair"
+      ? (r.fairPrice != null && r.price != null ? (r.price - r.fairPrice) / r.fairPrice : 999)
+      : r[key] ?? -1;
+  rows.sort((a, b) => {
+    const va = getv(a);
+    const vb = getv(b);
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return 0;
+  });
+  const arrow = (k) => (rankerSort.key === k ? (dir === -1 ? " ▼" : " ▲") : "");
+  const th = (k, label, cls = "") => `<th class="sortable ${cls}" data-k="${k}">${label}${arrow(k)}</th>`;
+  const head = `<tr>
+    <th>#</th>
+    ${th("symbol", "Ticker")}
+    ${th("overall", "Score")}
+    <th>EPS 6Q</th>
+    ${th("sector", "Sector")}
+    ${th("marketCap", "Mkt Cap")}
+    ${th("pillar.profit", "Profit")}
+    ${th("pillar.moat", "Moat")}
+    ${th("pillar.survival", "Survival")}
+    ${th("pillar.stability", "Stable")}
+    ${th("pillar.value", "Value")}
+    ${th("signal", "Signal")}
+    ${th("fair", "Fair value")}
+  </tr>`;
+  const body = rows
+    .map((r, i) => {
+      const gtone = r.overall >= 66 ? "buy" : r.overall >= 50 ? "" : "sell";
+      return `<tr class="rk-row" data-sym="${esc(r.symbol)}">
+      <td class="rk-rank">${i + 1}</td>
+      <td class="rk-tk"><b>${esc(r.symbol)}</b><span>${esc((r.name || "").slice(0, 20))}</span></td>
+      <td class="rk-score"><span class="rk-grade ${gtone}">${r.grade}</span> ${r.overall ?? "—"}</td>
+      <td class="rk-spark">${sparkline(r.epsTrend)}</td>
+      <td class="rk-sector">${esc(r.sector || "—")}</td>
+      <td>${r.marketCap != null ? fmt(r.marketCap, { compact: true }) : "—"}</td>
+      ${pillarCell(r.pillars.profit)}
+      ${pillarCell(r.pillars.moat)}
+      ${pillarCell(r.pillars.survival)}
+      ${pillarCell(r.pillars.stability)}
+      ${pillarCell(r.pillars.value)}
+      <td>${signalChip(r.techScore)}</td>
+      ${fairValueCell(r)}
+    </tr>`;
+    })
+    .join("");
+  content.innerHTML = `<div class="table-wrap"><table class="pf-table ranker-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    <p class="val-source">Quality pillars from fundamentals; Moat is a margin+scale proxy (the single-stock view does true peer ranking). Signal is our live technical read. Fair value uses a growth-adjusted reasonable P/E. Educational — not advice.</p>`;
+  content.querySelectorAll("th.sortable").forEach((th) => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      if (rankerSort.key === k) rankerSort.dir *= -1;
+      else rankerSort = { key: k, dir: k === "symbol" || k === "sector" ? 1 : -1 };
+      renderRankerTable();
+    };
+  });
+  content.querySelectorAll(".rk-row").forEach((row) => {
+    row.onclick = () => {
+      $("symbol").value = row.dataset.sym;
+      switchTab("analyze");
+      run();
+    };
+  });
+}
+
+function rankerNoKeyMsg() {
+  return `<div class="val-empty">
+    <p><b>The Stock Ranker needs a fundamentals data source.</b> Add a <b>free</b> Financial Modeling Prep API key in
+    the <b>☰ Account</b> menu → Fundamentals data (takes ~30 seconds).
+    Get one at <a href="https://site.financialmodelingprep.com/developer/docs" target="_blank" rel="noopener">financialmodelingprep.com</a>.</p>
+    <p>Then reopen this tab to rank ${RANKER_UNIVERSE.length} large-cap stocks by Profit, Moat, Survival, Stability &amp; Value — with our live Signal and Fair-Value price on every row.</p>
+  </div>`;
+}
+
 // ---------------- Tabs ----------------
 function switchTab(name) {
   const tier = currentTier();
   if (name === "screener" && !tier.screener) return openPricing();
   if (name === "paper" && !tier.paperTrading) return openPricing();
   if (name === "doctor" && !tier.doctor) return openPricing();
+  if (name === "ranker" && !tier.doctor) return openPricing();
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tabview").forEach((v) => v.classList.add("hidden"));
   $("tab-" + name).classList.remove("hidden");
   if (name === "screener") renderScreener();
   if (name === "paper") renderPaper();
+  if (name === "ranker") renderRanker(false);
 }
 
 function refreshTabLocks() {
@@ -1080,13 +1294,15 @@ function refreshTabLocks() {
   $("tabScreenerBtn").textContent = (tier.screener ? "💰" : "🔒") + " Income & Growth";
   $("tabPaperBtn").textContent = (tier.paperTrading ? "🎮" : "🔒") + " Paper Trading";
   $("tabDoctorBtn").textContent = (tier.doctor ? "🩺" : "🔒") + " Portfolio Doctor";
+  $("tabRankerBtn").textContent = (tier.doctor ? "🏆" : "🔒") + " Stock Ranker";
   const active = document.querySelector(".tab.active");
   if (active) {
     const t = active.dataset.tab;
     if (
       (t === "screener" && !tier.screener) ||
       (t === "paper" && !tier.paperTrading) ||
-      (t === "doctor" && !tier.doctor)
+      (t === "doctor" && !tier.doctor) ||
+      (t === "ranker" && !tier.doctor)
     )
       switchTab("analyze");
   }
@@ -1453,6 +1669,14 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("loadSampleBtn").addEventListener("click", () => {
     $("holdingsInput").value = "AAPL 60\nNVDA 40\nMSFT 30\nVOO 25\nSCHD 200\nTSLA 50\nBTC-USD 0.4";
+  });
+
+  // stock ranker
+  $("rankerSearch").addEventListener("input", () => {
+    if (rankerRows.length) renderRankerTable();
+  });
+  $("rankerRefresh").addEventListener("click", () => {
+    if (getFmpKey()) buildRanker();
   });
 
   // side menu

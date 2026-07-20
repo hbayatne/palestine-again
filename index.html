@@ -81,6 +81,7 @@
         <button class="tab" data-tab="screener" id="tabScreenerBtn">💰 Income &amp; Growth</button>
         <button class="tab" data-tab="paper" id="tabPaperBtn">🎮 Paper Trading</button>
         <button class="tab" data-tab="doctor" id="tabDoctorBtn">🩺 Portfolio Doctor</button>
+        <button class="tab" data-tab="ranker" id="tabRankerBtn">🏆 Stock Ranker</button>
       </nav>
 
       <!-- ============ ANALYZE ============ -->
@@ -268,6 +269,20 @@ BTC-USD 0.5
 
         <div id="doctorResults"></div>
         <div id="doctorIdeas"></div>
+      </section>
+
+      <!-- ============ STOCK RANKER ============ -->
+      <section id="tab-ranker" class="tabview hidden">
+        <p class="section-intro">A ranked <b>quality board</b> across a universe of large-cap stocks — each scored on
+          Profit, Moat, Survival, Stability and Value, averaged into an overall score &amp; letter grade. Unlike other
+          screeners, every row also shows our <b>live technical Signal</b> and a concrete <b>Fair-Value price</b>.
+          Click any row to open the full analysis. Results are cached for 12 hours.</p>
+        <div class="ranker-toolbar">
+          <input id="rankerSearch" placeholder="Filter by ticker / company / sector…" autocomplete="off" />
+          <span id="rankerAsOf" class="ranker-asof"></span>
+          <button id="rankerRefresh" class="btn-ghost">↻ Refresh</button>
+        </div>
+        <div id="rankerContent"></div>
       </section>
     </div>
   </div>

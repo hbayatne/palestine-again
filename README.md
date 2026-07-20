@@ -28,6 +28,11 @@ weighted score — always showing *why*, never a black box.
 - **Portfolio Doctor** — paste your real holdings or upload a broker CSV; it
   analyzes every position at live prices and returns Keep / Trim / Add calls,
   a diversification & concentration read, and quality "ideas to add".
+- **Stock Ranker** — a ranked quality board across a universe of large caps,
+  scored on Profit, Moat, Survival, Stability and Value into an overall grade,
+  with an EPS-trend sparkline plus — unlike other screeners — our live
+  technical Signal and a concrete Fair-Value price on every row. Sortable,
+  searchable, click-through to full analysis, cached 12h.
 - **Business Quality & Value scorecard** (stocks) — five 1–100 lenses
   (profitability, competitive rank vs peers, gross-margin quality, bear-market
   survival, and valuation vs a reasonable P/E with a fair-value estimate),

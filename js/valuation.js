@@ -141,6 +141,95 @@ export function scoreCompetition(target, peers) {
   return { score, rank, of, note };
 }
 
+// MOAT / competitive-durability proxy that scales to a whole universe without
+// per-stock peer fetches: pricing power (gross margin) + efficiency (net margin)
+// + scale (market cap). Used by the Stock Ranker.
+export function moatScore(f) {
+  const parts = [];
+  const w = [];
+  if (f.grossMarginPct != null) {
+    parts.push(interp(f.grossMarginPct, [[10, 10], [30, 40], [50, 68], [65, 86], [80, 100]]));
+    w.push(0.45);
+  }
+  if (f.netMarginPct != null) {
+    parts.push(interp(f.netMarginPct, [[-10, 10], [0, 30], [10, 60], [20, 82], [35, 100]]));
+    w.push(0.35);
+  }
+  if (f.marketCap != null) {
+    parts.push(interp(Math.log10(Math.max(1, f.marketCap)), [[8, 20], [9, 40], [10, 60], [11, 78], [12, 92], [13, 100]]));
+    w.push(0.2);
+  }
+  if (!parts.length) return null;
+  const ws = w.reduce((a, b) => a + b, 0);
+  return Math.round(vclamp(parts.reduce((a, p, i) => a + p * w[i], 0) / ws));
+}
+
+// Stability — low volatility (beta), durable profit, and a consistent EPS trend.
+export function stabilityScore(f, epsTrend) {
+  const parts = [];
+  const w = [];
+  if (f.beta != null) {
+    parts.push(interp(f.beta, [[0.4, 100], [0.8, 85], [1, 72], [1.5, 48], [2, 30], [3, 10]]));
+    w.push(0.4);
+  }
+  if (f.netMarginPct != null) {
+    parts.push(interp(f.netMarginPct, [[-10, 15], [0, 45], [10, 72], [20, 92]]));
+    w.push(0.3);
+  }
+  if (epsTrend && epsTrend.length >= 4) {
+    const pos = epsTrend.filter((e) => e > 0).length / epsTrend.length;
+    let ups = 0;
+    for (let i = 1; i < epsTrend.length; i++) if (epsTrend[i] >= epsTrend[i - 1]) ups++;
+    const trend = ups / (epsTrend.length - 1);
+    parts.push(vclamp(pos * 60 + trend * 40));
+    w.push(0.3);
+  }
+  if (!parts.length) return null;
+  const ws = w.reduce((a, b) => a + b, 0);
+  return Math.round(vclamp(parts.reduce((a, p, i) => a + p * w[i], 0) / ws));
+}
+
+// One ranked row: five pillar scores (1–100) + an overall quality score+grade.
+// techScore is the technical signal score (−100..100), folded in lightly.
+export function buildRankerRow(f, techScore) {
+  const profit = scoreProfitability(f.netMarginPct);
+  const moat = moatScore(f);
+  const survival = scoreSurvival(f);
+  const val = scoreValuation(f);
+  const value = val.score;
+  const stability = stabilityScore(f, f.epsTrend);
+  const pillars = { profit, moat, survival, value, stability };
+  const weights = { profit: 0.22, moat: 0.22, survival: 0.2, value: 0.18, stability: 0.18 };
+  let sum = 0;
+  let wsum = 0;
+  for (const k of Object.keys(pillars)) {
+    if (pillars[k] != null) {
+      sum += pillars[k] * weights[k];
+      wsum += weights[k];
+    }
+  }
+  const quality = wsum ? Math.round(sum / wsum) : null;
+  // Overall blends quality (85%) with the technical signal (15%).
+  const techPct = techScore == null ? null : (techScore + 100) / 2;
+  const overall =
+    quality == null ? null : Math.round(techPct == null ? quality : quality * 0.85 + techPct * 0.15);
+  return {
+    symbol: f.symbol,
+    name: f.name,
+    sector: f.sector,
+    marketCap: f.marketCap,
+    epsTrend: f.epsTrend || null,
+    pillars,
+    quality,
+    overall,
+    grade: overall != null ? letterRating(overall) : "—",
+    fairPrice: val.fairPrice,
+    price: f.price,
+    valuationNote: val.note,
+    techScore,
+  };
+}
+
 // Letter rating from an overall 1–100.
 export function letterRating(score) {
   if (score >= 90) return "A+";
