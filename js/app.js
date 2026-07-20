@@ -1150,7 +1150,7 @@ async function renderPaper() {
     ? v.rows
         .map(
           (r) => `<tr>
-        <td>${esc(r.symbol)}</td>
+        <td><button class="link-sym" data-sym="${esc(r.symbol)}" data-qty="${r.qty}">${esc(r.symbol)}</button></td>
         <td>${trimQty(r.qty)}</td>
         <td>$${fmt(r.avgCost)}</td>
         <td>${r.price != null ? "$" + fmt(r.price) : "—"}</td>
@@ -1159,10 +1159,18 @@ async function renderPaper() {
             r.pnl != null
               ? (r.pnl >= 0 ? "+" : "-") + "$" + fmt(Math.abs(r.pnl)) + ` (${r.pnlPct >= 0 ? "+" : ""}${r.pnlPct.toFixed(1)}%)`
               : "—"
-          }</td></tr>`
+          }</td>
+        <td><button class="row-sell" data-sym="${esc(r.symbol)}" data-qty="${r.qty}">Sell all</button></td></tr>`
         )
         .join("")
-    : `<tr><td colspan="6" class="empty">No positions yet — buy something above.</td></tr>`;
+    : `<tr><td colspan="7" class="empty">No positions yet — buy something above.</td></tr>`;
+  // wire per-row actions
+  $("positionsBody").querySelectorAll(".row-sell").forEach((btn) => {
+    btn.onclick = () => sellPosition(btn.dataset.sym, parseFloat(btn.dataset.qty));
+  });
+  $("positionsBody").querySelectorAll(".link-sym").forEach((btn) => {
+    btn.onclick = () => loadIntoOrder(btn.dataset.sym, parseFloat(btn.dataset.qty));
+  });
 
   $("historyBody").innerHTML = p.history.length
     ? p.history
@@ -1176,36 +1184,64 @@ async function renderPaper() {
     : `<tr><td colspan="6" class="empty">No trades yet.</td></tr>`;
 }
 
+function setPriceDisplay(sym, price) {
+  const el = $("tradePrice");
+  el.dataset.sym = sym || "";
+  el.dataset.price = price != null ? price : "";
+  el.textContent = price != null ? "$" + fmt(price) : sym ? "n/a" : "—";
+}
 async function doQuote() {
   const sym = $("tradeSymbol").value.trim().toUpperCase();
-  const el = $("tradePrice");
   if (!sym) {
-    el.textContent = "—";
-    el.dataset.price = "";
+    setPriceDisplay("", null);
     return null;
   }
-  el.textContent = "…";
+  $("tradePrice").textContent = "…";
   try {
     const q = await fetchQuote(sym);
-    el.dataset.price = q.price;
-    el.textContent = "$" + fmt(q.price);
+    setPriceDisplay(sym, q.price);
     return q.price;
   } catch {
-    el.textContent = "n/a";
-    el.dataset.price = "";
+    setPriceDisplay(sym, null);
     return null;
   }
 }
+
+// Always fetch a fresh live price for the exact symbol being ordered — never
+// reuse a cached price from a different symbol. Returns the price or null.
+async function livePriceFor(sym) {
+  try {
+    const q = await fetchQuote(sym);
+    setPriceDisplay(sym, q.price);
+    return q.price;
+  } catch {
+    setPriceDisplay(sym, null);
+    return null;
+  }
+}
+
 async function doTrade(side) {
   const email = pfEmail();
   const sym = $("tradeSymbol").value.trim().toUpperCase();
   const qty = parseFloat($("tradeQty").value);
-  let price = parseFloat($("tradePrice").dataset.price || "");
   const msg = $("tradeMsg");
+  if (!sym) {
+    msg.textContent = "Enter a symbol first.";
+    msg.className = "trade-msg err";
+    return;
+  }
+  if (!(qty > 0)) {
+    msg.textContent = "Enter a quantity greater than zero.";
+    msg.className = "trade-msg err";
+    return;
+  }
+  msg.textContent = `Getting live price for ${sym}…`;
+  msg.className = "trade-msg";
+  const price = await livePriceFor(sym); // fresh price for THIS symbol
   if (!price) {
-    msg.textContent = "Fetching live price…";
-    msg.className = "trade-msg";
-    price = await doQuote();
+    msg.textContent = `Couldn't get a live price for ${sym}. Check the symbol and try again.`;
+    msg.className = "trade-msg err";
+    return;
   }
   const res = portfolio.trade(email, side, sym, qty, price);
   if (res.error) {
@@ -1216,6 +1252,36 @@ async function doTrade(side) {
     msg.className = "trade-msg ok";
     renderPaper();
   }
+}
+
+// Sell an entire position straight from the positions table (fresh live price).
+async function sellPosition(sym, qty) {
+  const msg = $("tradeMsg");
+  msg.textContent = `Selling ${trimQty(qty)} ${sym} at live price…`;
+  msg.className = "trade-msg";
+  const price = await livePriceFor(sym);
+  if (!price) {
+    msg.textContent = `Couldn't get a live price for ${sym}. Try again.`;
+    msg.className = "trade-msg err";
+    return;
+  }
+  const res = portfolio.trade(pfEmail(), "sell", sym, qty, price);
+  if (res.error) {
+    msg.textContent = res.error;
+    msg.className = "trade-msg err";
+  } else {
+    msg.textContent = `Sold ${trimQty(qty)} ${sym} @ $${fmt(price)}.`;
+    msg.className = "trade-msg ok";
+    renderPaper();
+  }
+}
+
+// Load a holding into the order form (for partial sells / adjustments).
+function loadIntoOrder(sym, qty) {
+  $("tradeSymbol").value = sym;
+  $("tradeQty").value = qty;
+  doQuote();
+  $("tradeSymbol").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 // ---------------- Boot ----------------
@@ -1274,6 +1340,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("tradeSymbol").addEventListener("keydown", (e) => {
     if (e.key === "Enter") doQuote();
   });
+  // clear any stale price the moment the symbol changes (prevents mis-priced orders)
+  $("tradeSymbol").addEventListener("input", () => setPriceDisplay("", null));
 
   // portfolio doctor
   $("runDoctor").addEventListener("click", runDoctor);

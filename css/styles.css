@@ -410,3 +410,11 @@ button#analyzeBtn:disabled { opacity: 0.5; cursor: default; }
 .auth-skip { display: block; width: 100%; margin-top: 14px; background: transparent; border: 1px solid var(--border);
   color: var(--muted); padding: 10px; border-radius: 9px; cursor: pointer; font-size: 13px; }
 .auth-skip:hover { color: var(--text); border-color: var(--muted); }
+
+/* ===== Positions table actions ===== */
+.link-sym { background: none; border: none; color: var(--accent); font-weight: 700;
+  font-family: ui-monospace, monospace; font-size: 13.5px; cursor: pointer; padding: 0; }
+.link-sym:hover { text-decoration: underline; }
+.row-sell { background: rgba(226,55,68,0.12); border: 1px solid rgba(226,55,68,0.4); color: #ef8e97;
+  font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.row-sell:hover { background: rgba(226,55,68,0.22); color: #fff; }
