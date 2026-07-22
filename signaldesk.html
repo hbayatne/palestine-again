@@ -623,6 +623,28 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .val-reason { font-size: 12px; color: var(--muted); margin: 6px 0; }
 .val-reason code { background: var(--panel2); padding: 2px 6px; border-radius: 5px; word-break: break-word; }
 
+/* ===== Welcome / how-it-works guide ===== */
+.welcome-inner { max-width: 640px; }
+.welcome-head { margin-bottom: 18px; }
+.welcome-brand { font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.welcome-lede { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 10px 0 0; }
+.welcome-steps { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 14px; }
+.welcome-steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; line-height: 1.5; }
+.ws-badge { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #241400;
+  font-weight: 800; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.welcome-steps code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+.welcome-tabs { display: grid; gap: 6px; margin-top: 8px; }
+.welcome-tabs span { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 12.5px; }
+.welcome-disclaimer { font-size: 12px; color: var(--muted); background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; line-height: 1.5; margin: 0 0 18px; }
+.welcome-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.welcome-actions .btn-upgrade { padding: 11px 22px; font-size: 14px; }
+.welcome-dismiss { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.welcome-dismiss input { accent-color: var(--accent); cursor: pointer; }
+@media (max-width: 560px) { .welcome-actions { flex-direction: column-reverse; align-items: stretch; }
+  .welcome-actions .btn-upgrade { width: 100%; } }
+
 </style>
 </head>
 <body>
@@ -653,6 +675,7 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
       </div>
       <div class="userbar">
         <span id="tierBadge" class="tier-badge t-pro">PRO</span>
+        <button id="helpBtn" class="btn-ghost" title="How this app works">? Help</button>
         <button id="menuBtn" class="btn-ghost">☰ Account</button>
       </div>
     </header>
@@ -954,6 +977,47 @@ BTC-USD 0.5
         </div>
         <div id="rankerContent"></div>
       </section>
+    </div>
+  </div>
+
+  <!-- ===== Welcome / how-it-works guide ===== -->
+  <div id="welcomeModal" class="modal hidden">
+    <div class="modal-inner welcome-inner">
+      <button id="closeWelcome" class="modal-close">✕</button>
+      <div class="welcome-head">
+        <div class="welcome-brand"><span class="spark">▲</span> Welcome to SignalDesk</div>
+        <p class="welcome-lede">Your all-in-one desk for deciding <b>what to buy, what to sell, and what to hold</b> —
+          any stock, ETF, fund, crypto, forex or commodity. Here's the 30-second tour.</p>
+      </div>
+
+      <ol class="welcome-steps">
+        <li><span class="ws-badge">1</span><div>
+          <b>Search any asset & press Analyze.</b> Type a name or ticker (like <code>Apple</code>, <code>TSLA</code>,
+          <code>gold</code>) on the <b>📊 Analyze</b> tab. You'll get a clear <b>Buy / Sell / Hold</b> signal, a plain-English
+          summary, a chart, and a suggested trade plan with a stop-loss.
+        </div></li>
+        <li><span class="ws-badge">2</span><div>
+          <b>Explore the other tabs.</b>
+          <div class="welcome-tabs">
+            <span><b>💰 Income &amp; Growth</b> — curated dividend &amp; growth watchlists.</span>
+            <span><b>🎮 Paper Trading</b> — practice with $100k of fake cash at real prices.</span>
+            <span><b>🩺 Portfolio Doctor</b> — paste your real holdings for a Keep/Trim/Add checkup.</span>
+            <span><b>🏆 Stock Ranker</b> — a quality board grading stocks A–F on profit, moat &amp; value.</span>
+          </div>
+        </div></li>
+        <li><span class="ws-badge">3</span><div>
+          <b>Unlock Business Quality &amp; Value (optional).</b> For company profitability, margins and fair-value scores,
+          add a <b>free</b> data key under <b>☰ Account → Fundamentals data</b>. Everything else works without it.
+        </div></li>
+      </ol>
+
+      <p class="welcome-disclaimer"><b>Honest note:</b> this is an educational tool, not financial advice. No signal is
+        guaranteed — always use a stop-loss and do your own research.</p>
+
+      <div class="welcome-actions">
+        <button id="welcomeStart" class="btn-upgrade">Got it — let's go →</button>
+        <label class="welcome-dismiss"><input type="checkbox" id="welcomeDontShow" checked /> Don't show this again</label>
+      </div>
     </div>
   </div>
 
@@ -3148,12 +3212,6 @@ function combine(technicalScore, fundamentalScore, techWeight = 0.7) {
 
 
 // app.js — UI controller: auth gate -> tier gating -> data -> signal -> render.
-
-
-
-
-
-
 
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
@@ -5408,6 +5466,29 @@ window.addEventListener("DOMContentLoaded", () => {
   // expose a couple handlers for inline onclicks
   window.__openPricing = openPricing;
   window.__choosePlan = choosePlan;
+
+  // welcome / how-it-works guide
+  const WELCOME_KEY = "signaldesk_seen_welcome";
+  const openWelcome = () => $("welcomeModal").classList.remove("hidden");
+  const closeWelcome = () => $("welcomeModal").classList.add("hidden");
+  $("helpBtn").addEventListener("click", () => {
+    $("welcomeDontShow").checked = false; // reopening manually shouldn't force-hide it
+    openWelcome();
+  });
+  $("closeWelcome").addEventListener("click", closeWelcome);
+  $("welcomeStart").addEventListener("click", () => {
+    if ($("welcomeDontShow").checked) {
+      try { localStorage.setItem(WELCOME_KEY, "1"); } catch {}
+    }
+    closeWelcome();
+  });
+  $("welcomeModal").addEventListener("click", (e) => {
+    if (e.target.id === "welcomeModal") closeWelcome();
+  });
+  // show automatically on first visit
+  try {
+    if (!localStorage.getItem(WELCOME_KEY)) openWelcome();
+  } catch {}
 
   // No login gate in dev mode — go straight into the app with full access.
   hideAuth();

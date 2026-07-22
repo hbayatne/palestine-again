@@ -2277,6 +2277,29 @@ window.addEventListener("DOMContentLoaded", () => {
   window.__openPricing = openPricing;
   window.__choosePlan = choosePlan;
 
+  // welcome / how-it-works guide
+  const WELCOME_KEY = "signaldesk_seen_welcome";
+  const openWelcome = () => $("welcomeModal").classList.remove("hidden");
+  const closeWelcome = () => $("welcomeModal").classList.add("hidden");
+  $("helpBtn").addEventListener("click", () => {
+    $("welcomeDontShow").checked = false; // reopening manually shouldn't force-hide it
+    openWelcome();
+  });
+  $("closeWelcome").addEventListener("click", closeWelcome);
+  $("welcomeStart").addEventListener("click", () => {
+    if ($("welcomeDontShow").checked) {
+      try { localStorage.setItem(WELCOME_KEY, "1"); } catch {}
+    }
+    closeWelcome();
+  });
+  $("welcomeModal").addEventListener("click", (e) => {
+    if (e.target.id === "welcomeModal") closeWelcome();
+  });
+  // show automatically on first visit
+  try {
+    if (!localStorage.getItem(WELCOME_KEY)) openWelcome();
+  } catch {}
+
   // No login gate in dev mode — go straight into the app with full access.
   hideAuth();
   applyTier();
