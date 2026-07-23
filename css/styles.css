@@ -592,3 +592,48 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
   cursor: pointer; filter: grayscale(0.4) opacity(0.6); }
 #chartType .ct-btn:hover { filter: none; background: rgba(255,255,255,0.05); }
 #chartType .ct-btn.active { filter: none; background: linear-gradient(180deg,#21324c,#17233a); box-shadow: 0 0 0 1px rgba(76,154,255,0.35); }
+
+/* ===== Portfolio Doctor export ===== */
+.doctor-export { display: flex; gap: 8px; margin: 4px 0 10px; flex-wrap: wrap; }
+.report-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.report-brand { font-weight: 800; font-size: 16px; }
+.report-brand .spark { color: var(--accent); }
+.report-date { font-size: 12px; color: var(--muted); }
+#doctorReport { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+@media print {
+  body.printing-doctor * { visibility: hidden !important; }
+  body.printing-doctor #doctorReport,
+  body.printing-doctor #doctorReport * { visibility: visible !important; }
+  body.printing-doctor #doctorReport { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+  body.printing-doctor .doctor-export { display: none !important; }
+}
+
+/* ===== Key test / value error ===== */
+.fund-key-msg.ok { color: var(--buy); }
+.fund-key-msg.err { color: var(--sell); }
+.val-reason { font-size: 12px; color: var(--muted); margin: 6px 0; }
+.val-reason code { background: var(--panel2); padding: 2px 6px; border-radius: 5px; word-break: break-word; }
+
+/* ===== Welcome / how-it-works guide ===== */
+.welcome-inner { max-width: 640px; }
+.welcome-head { margin-bottom: 18px; }
+.welcome-brand { font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.welcome-lede { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 10px 0 0; }
+.welcome-steps { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 14px; }
+.welcome-steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; line-height: 1.5; }
+.ws-badge { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #241400;
+  font-weight: 800; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.welcome-steps code { background: var(--panel2); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+.welcome-tabs { display: grid; gap: 6px; margin-top: 8px; }
+.welcome-tabs span { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; font-size: 12.5px; }
+.welcome-disclaimer { font-size: 12px; color: var(--muted); background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; line-height: 1.5; margin: 0 0 18px; }
+.welcome-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.welcome-actions .btn-upgrade { padding: 11px 22px; font-size: 14px; }
+.welcome-dismiss { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.welcome-dismiss input { accent-color: var(--accent); cursor: pointer; }
+@media (max-width: 560px) { .welcome-actions { flex-direction: column-reverse; align-items: stretch; }
+  .welcome-actions .btn-upgrade { width: 100%; } }

@@ -243,6 +243,7 @@ export async function fetchQuote(symbol) {
 // Modeling Prep (free API key) when present, and best-effort keyless Yahoo
 // quoteSummary via proxy otherwise. Returns a normalized object or null.
 const FMP = "https://financialmodelingprep.com/api/v3";
+const FMP_STABLE = "https://financialmodelingprep.com/stable";
 const FMP_KEY_STORE = "signaldesk_fmp_key";
 
 export function getFmpKey() {
@@ -261,69 +262,129 @@ export function setFmpKey(k) {
   }
 }
 
-async function fmpGet(path, key) {
-  const url = `${FMP}${path}${path.includes("?") ? "&" : "?"}apikey=${encodeURIComponent(key)}`;
+// Robust JSON GET that surfaces FMP's actual error text (401/limit/etc).
+async function fmpJSON(url) {
   const res = await tfetch(url, 8000);
-  if (!res.ok) throw new Error("FMP " + res.status);
-  const j = await res.json();
+  const txt = await res.text();
+  let j;
+  try {
+    j = JSON.parse(txt);
+  } catch {
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 90)}`);
+  }
   if (j && j["Error Message"]) throw new Error(j["Error Message"]);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return j;
 }
-
-export async function fetchFundamentalsFull(symbol) {
-  const key = getFmpKey();
-  if (key) {
-    try {
-      return await fromFMP(symbol, key);
-    } catch {
-      /* fall back to keyless Yahoo */
-    }
-  }
-  try {
-    return await fromYahooFundamentals(symbol);
-  } catch {
-    return null;
-  }
+// v3 uses path params + apikey; kept for the batched ranker calls.
+async function fmpGet(path, key) {
+  return fmpJSON(`${FMP}${path}${path.includes("?") ? "&" : "?"}apikey=${encodeURIComponent(key)}`);
 }
 
-async function fromFMP(sym, key) {
-  const [prof, ratios, inc] = await Promise.all([
-    fmpGet(`/profile/${sym}`, key),
-    fmpGet(`/ratios-ttm/${sym}`, key),
-    fmpGet(`/income-statement/${sym}?period=quarter&limit=6`, key),
-  ]);
-  const p = Array.isArray(prof) ? prof[0] : null;
-  const r = Array.isArray(ratios) ? ratios[0] : null;
-  const q = Array.isArray(inc) ? inc : []; // newest first
-  if (!p && !r) throw new Error("no FMP data");
-  const epsTrend = q.slice(0, 6).map((x) => +x.eps).reverse(); // oldest → newest
-  const epsTTM = q.slice(0, 4).reduce((s, x) => s + (+x.eps || 0), 0);
-  const revenueTTM = q.slice(0, 4).reduce((s, x) => s + (+x.revenue || 0), 0) || null;
-  // YoY revenue growth: most recent quarter vs the same quarter a year ago
-  const revenueGrowthPct =
-    q[0] && q[4] && q[4].revenue ? ((q[0].revenue - q[4].revenue) / Math.abs(q[4].revenue)) * 100 : null;
-  const netMarginPct = r && r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null;
-  const grossMarginPct = r && r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null;
+function pick(o, ...keys) {
+  for (const k of keys) if (o && o[k] != null) return o[k];
+  return null;
+}
+
+// Normalize a profile + ratios-ttm + quarterly income into our shape, tolerating
+// the field-name differences between the legacy v3 and newer /stable responses.
+function normalizeFmp(p, r, quarters, sym) {
+  const q = Array.isArray(quarters) ? quarters : [];
+  const epsOf = (x) => +pick(x, "eps", "epsdiluted", "epsDiluted");
+  const epsTrend = q.slice(0, 6).map(epsOf).filter((v) => Number.isFinite(v)).reverse();
+  const epsTTM = q.slice(0, 4).reduce((s, x) => s + (epsOf(x) || 0), 0);
+  const revTTM = q.slice(0, 4).reduce((s, x) => s + (+pick(x, "revenue") || 0), 0) || null;
+  const rev0 = pick(q[0], "revenue");
+  const rev4 = pick(q[4], "revenue");
+  const revenueGrowthPct = rev0 != null && rev4 ? ((rev0 - rev4) / Math.abs(rev4)) * 100 : null;
+  const nm = pick(r, "netProfitMarginTTM", "netProfitMargin");
+  const gm = pick(r, "grossProfitMarginTTM", "grossProfitMargin");
+  const pe = pick(r, "priceEarningsRatioTTM", "priceToEarningsRatioTTM", "peRatioTTM", "peRatio");
+  const d2e = pick(r, "debtEquityRatioTTM", "debtToEquityRatioTTM", "debtToEquityTTM", "debtToEquity");
+  const cr = pick(r, "currentRatioTTM", "currentRatio");
+  const netMarginPct = nm != null ? nm * 100 : null;
+  const grossMarginPct = gm != null ? gm * 100 : null;
   return {
     symbol: sym,
-    name: p ? p.companyName : sym,
-    sector: p ? p.sector : null,
-    industry: p ? p.industry : null,
-    price: p && p.price != null ? +p.price : null,
-    marketCap: p && p.mktCap != null ? +p.mktCap : null,
-    beta: p && p.beta != null ? +p.beta : null,
-    eps: epsTTM || (q[0] && q[0].eps != null ? +q[0].eps : null),
+    name: pick(p, "companyName") || sym,
+    sector: pick(p, "sector"),
+    industry: pick(p, "industry"),
+    price: numOrNull(pick(p, "price")),
+    marketCap: numOrNull(pick(p, "mktCap", "marketCap", "marketCapTTM")),
+    beta: numOrNull(pick(p, "beta")),
+    eps: epsTTM || null,
     epsTrend: epsTrend.length ? epsTrend : null,
-    pe: r && r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
+    pe: numOrNull(pe),
     grossMarginPct,
     netMarginPct,
-    revenue: revenueTTM,
+    revenue: revTTM,
     revenueGrowthPct,
-    debtToEquity: r && r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
-    currentRatio: r && r.currentRatioTTM != null ? +r.currentRatioTTM : null,
+    debtToEquity: numOrNull(d2e),
+    currentRatio: numOrNull(cr),
     fcfPositive: netMarginPct != null ? netMarginPct > 0 : null,
     source: "Financial Modeling Prep",
   };
+}
+function numOrNull(v) {
+  return v != null && Number.isFinite(+v) ? +v : null;
+}
+
+async function fromFMPv3(sym, key) {
+  const [p, r, inc] = await Promise.all([
+    fmpJSON(`${FMP}/profile/${sym}?apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP}/ratios-ttm/${sym}?apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP}/income-statement/${sym}?period=quarter&limit=6&apikey=${encodeURIComponent(key)}`),
+  ]);
+  const prof = Array.isArray(p) ? p[0] : p;
+  const rat = Array.isArray(r) ? r[0] : r;
+  if (!prof && !rat) throw new Error("no rows");
+  return normalizeFmp(prof, rat, inc, sym);
+}
+async function fromFMPStable(sym, key) {
+  const [p, r, inc] = await Promise.all([
+    fmpJSON(`${FMP_STABLE}/profile?symbol=${sym}&apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP_STABLE}/ratios-ttm?symbol=${sym}&apikey=${encodeURIComponent(key)}`),
+    fmpJSON(`${FMP_STABLE}/income-statement?symbol=${sym}&period=quarter&limit=6&apikey=${encodeURIComponent(key)}`),
+  ]);
+  const prof = Array.isArray(p) ? p[0] : p;
+  const rat = Array.isArray(r) ? r[0] : r;
+  if (!prof && !rat) throw new Error("no rows");
+  return normalizeFmp(prof, rat, inc, sym);
+}
+
+// Returns the normalized object, or { __error } describing why it failed.
+export async function fetchFundamentalsFull(symbol) {
+  const key = getFmpKey();
+  let err = "";
+  if (key) {
+    try { return await fromFMPv3(symbol, key); } catch (e) { err = "v3 " + e.message; }
+    try { return await fromFMPStable(symbol, key); } catch (e) { err += " · stable " + e.message; }
+  } else {
+    err = "no API key";
+  }
+  try { return await fromYahooFundamentals(symbol); } catch (e) { err += " · yahoo " + e.message; }
+  return { __error: err };
+}
+
+// Quick diagnostic for the side-menu "Test key" button.
+export async function testFmpKey() {
+  const key = getFmpKey();
+  if (!key) return { ok: false, msg: "No key saved yet." };
+  // try v3 then stable
+  try {
+    const a = await fmpJSON(`${FMP}/profile/AAPL?apikey=${encodeURIComponent(key)}`);
+    const p = Array.isArray(a) ? a[0] : a;
+    if (p && p.symbol) return { ok: true, msg: `Working (v3) — AAPL @ $${p.price}.` };
+  } catch (e) {
+    try {
+      const a = await fmpJSON(`${FMP_STABLE}/profile?symbol=AAPL&apikey=${encodeURIComponent(key)}`);
+      const p = Array.isArray(a) ? a[0] : a;
+      if (p && p.symbol) return { ok: true, msg: `Working (stable) — AAPL @ $${p.price}.` };
+    } catch (e2) {
+      return { ok: false, msg: `${e.message} / ${e2.message}` };
+    }
+  }
+  return { ok: false, msg: "Key accepted but returned no data (plan/endpoint limit?)." };
 }
 
 async function fromYahooFundamentals(sym) {
@@ -378,24 +439,36 @@ export async function fetchProfiles(symbols) {
   const key = getFmpKey();
   const out = {};
   if (!key) return out;
+  const store = (p) => {
+    if (!p || !p.symbol) return;
+    out[p.symbol.toUpperCase()] = {
+      name: p.companyName || p.symbol,
+      sector: p.sector || null,
+      price: numOrNull(pick(p, "price")),
+      marketCap: numOrNull(pick(p, "mktCap", "marketCap")),
+      beta: numOrNull(pick(p, "beta")),
+    };
+  };
   const chunks = [];
   for (let i = 0; i < symbols.length; i += 50) chunks.push(symbols.slice(i, i + 50));
   for (const chunk of chunks) {
+    let got = false;
     try {
       const arr = await fmpGet(`/profile/${chunk.join(",")}`, key);
-      for (const p of Array.isArray(arr) ? arr : []) {
-        if (!p || !p.symbol) continue;
-        out[p.symbol.toUpperCase()] = {
-          name: p.companyName || p.symbol,
-          sector: p.sector || null,
-          price: p.price != null ? +p.price : null,
-          marketCap: p.mktCap != null ? +p.mktCap : null,
-          beta: p.beta != null ? +p.beta : null,
-        };
-      }
+      for (const p of Array.isArray(arr) ? arr : []) { store(p); got = true; }
     } catch {
-      /* skip this chunk */
+      /* v3 failed for this chunk */
     }
+    if (got) continue;
+    // stable fallback — fetch each symbol individually
+    await mapLimit(chunk, 5, async (sym) => {
+      try {
+        const arr = await fmpJSON(`${FMP_STABLE}/profile?symbol=${sym}&apikey=${encodeURIComponent(key)}`);
+        store(Array.isArray(arr) ? arr[0] : arr);
+      } catch {
+        /* skip */
+      }
+    });
   }
   return out;
 }
@@ -404,19 +477,28 @@ export async function fetchProfiles(symbols) {
 export async function fetchRatiosTTM(sym) {
   const key = getFmpKey();
   if (!key) return null;
+  const shape = (r) =>
+    !r
+      ? null
+      : {
+          grossMarginPct: (() => { const v = pick(r, "grossProfitMarginTTM", "grossProfitMargin"); return v != null ? v * 100 : null; })(),
+          netMarginPct: (() => { const v = pick(r, "netProfitMarginTTM", "netProfitMargin"); return v != null ? v * 100 : null; })(),
+          pe: numOrNull(pick(r, "priceEarningsRatioTTM", "priceToEarningsRatioTTM", "peRatioTTM", "peRatio")),
+          debtToEquity: numOrNull(pick(r, "debtEquityRatioTTM", "debtToEquityRatioTTM", "debtToEquityTTM", "debtToEquity")),
+          currentRatio: numOrNull(pick(r, "currentRatioTTM", "currentRatio")),
+        };
   try {
     const arr = await fmpGet(`/ratios-ttm/${sym}`, key);
-    const r = Array.isArray(arr) ? arr[0] : null;
-    if (!r) return null;
-    return {
-      grossMarginPct: r.grossProfitMarginTTM != null ? r.grossProfitMarginTTM * 100 : null,
-      netMarginPct: r.netProfitMarginTTM != null ? r.netProfitMarginTTM * 100 : null,
-      pe: r.priceEarningsRatioTTM != null ? +r.priceEarningsRatioTTM : null,
-      debtToEquity: r.debtEquityRatioTTM != null ? +r.debtEquityRatioTTM : null,
-      currentRatio: r.currentRatioTTM != null ? +r.currentRatioTTM : null,
-    };
+    const r = shape(Array.isArray(arr) ? arr[0] : arr);
+    if (r) return r;
+    throw new Error("empty");
   } catch {
-    return null;
+    try {
+      const arr = await fmpJSON(`${FMP_STABLE}/ratios-ttm?symbol=${sym}&apikey=${encodeURIComponent(key)}`);
+      return shape(Array.isArray(arr) ? arr[0] : arr);
+    } catch {
+      return null;
+    }
   }
 }
 
