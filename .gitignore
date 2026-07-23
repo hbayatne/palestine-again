@@ -1,0 +1,24 @@
+# Video clips — add them locally to mario_land/Clips/ (too large for git)
+mario_land/Clips/*.mp4
+mario_land/Clips/*.mov
+mario_land/Clips/*.avi
+mario_land/Clips/*.mkv
+mario_land/Clips/*.m4v
+mario_land/Clips/*.webm
+mario_land/Clips/*.MP4
+mario_land/Clips/*.MOV
+mario_land/Clips/*.AVI
+mario_land/Clips/*.MKV
+
+# Output videos
+mario_land/Output/*.mp4
+
+# Temp files
+_tmp_audio.m4a
+/tmp/mario_land_bot.log
+
+# Python (from old bot.py)
+__pycache__/
+*.pyc
+.venv/
+venv/
