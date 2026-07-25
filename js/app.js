@@ -23,6 +23,14 @@ import * as auth from "./auth.js";
 import { fetchNews } from "./news.js";
 import { WATCHLISTS } from "./watchlists.js";
 import * as portfolio from "./portfolio.js";
+import {
+  fetchFearGreed,
+  fgRead,
+  fgTone,
+  fetchCoinbasePremium,
+  accumulationScore,
+  accumulationOpportunity,
+} from "./sentiment.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -207,6 +215,145 @@ async function run() {
 
   // Business quality & value (stocks only, Pro) — loads async, non-blocking.
   loadValue(symbol, tier);
+
+  // Market sentiment & accumulation (crypto) — loads async, non-blocking.
+  loadSentiment(symbol, tier, result);
+}
+
+// ---------------- Fear & Greed + Accumulation Radar ----------------
+let sentimentReqId = 0;
+async function loadSentiment(symbol, tier, result) {
+  const fgCard = $("fgCard");
+  const accumCard = $("accumCard");
+  const callout = $("accumOpportunity");
+  const isCrypto = assetType(symbol) === "Crypto";
+
+  // These are crypto-only tools; hide them cleanly for everything else.
+  if (!isCrypto || !tier.sentiment) {
+    fgCard.classList.add("hidden");
+    accumCard.classList.add("hidden");
+    callout.classList.add("hidden");
+    return;
+  }
+  const myReq = ++sentimentReqId;
+
+  // --- Accumulation radar (candles are already loaded; premium is async) ---
+  accumCard.classList.remove("hidden");
+  $("accumContent").innerHTML = `<p class="status loading">Reading order flow…</p>`;
+  const premium = looksLikeCrypto(symbol) ? await fetchCoinbasePremium(symbol) : null;
+  if (myReq !== sentimentReqId) return;
+  const accum = accumulationScore(state.candles, premium ? premium.premiumPct : null);
+  accum.symbol = symbol.replace(/(USDT|USDC|BUSD)$/i, "").replace(/-USD$/i, "");
+  renderAccum(accum, premium);
+
+  // Opportunity / caution banner tied to the technical signal.
+  const opp = accumulationOpportunity(accum, result.action);
+  if (opp) {
+    callout.className = "accum-callout " + (opp.kind === "buy-dip" ? "opp-buy" : "opp-warn");
+    callout.innerHTML = `<span class="ac-icon">${opp.kind === "buy-dip" ? "🐋" : "⚠️"}</span>
+      <span><b>${esc(opp.title)}</b> — ${esc(opp.body)}</span>`;
+    callout.classList.remove("hidden");
+  } else {
+    callout.classList.add("hidden");
+  }
+
+  // --- Fear & Greed (market-wide) ---
+  fgCard.classList.remove("hidden");
+  $("fgContent").innerHTML = `<p class="status loading">Loading market sentiment…</p>`;
+  try {
+    const fg = await fetchFearGreed(31);
+    if (myReq !== sentimentReqId) return;
+    renderFearGreed(fg);
+  } catch (err) {
+    if (myReq !== sentimentReqId) return;
+    $("fgContent").innerHTML = `<p class="val-empty-note">Sentiment index unavailable right now (${esc(err.message)}).</p>`;
+  }
+}
+
+function renderAccum(accum, premium) {
+  if (!accum.available) {
+    $("accumContent").innerHTML = `<p class="val-empty-note">${esc(accum.reason || "Accumulation read unavailable for this source.")}</p>`;
+    return;
+  }
+  const tone = accum.score >= 70 ? "buy" : accum.score >= 58 ? "buy" : accum.score >= 42 ? "hold" : "sell";
+  const premRow =
+    premium && premium.premiumPct != null
+      ? chip("Coinbase premium", (premium.premiumPct >= 0 ? "+" : "") + premium.premiumPct.toFixed(2) + "%", premium.premiumPct > 0.02 ? "buy" : premium.premiumPct < -0.05 ? "sell" : "")
+      : chip("Coinbase premium", "n/a");
+  const metrics = [
+    chip("Dip from high", "−" + accum.dipPct.toFixed(1) + "%", accum.inDip ? "warn" : ""),
+    chip("Money flow (CMF)", accum.cmf != null ? accum.cmf.toFixed(2) : "n/a", accum.cmf > 0 ? "buy" : accum.cmf < 0 ? "sell" : ""),
+    premRow,
+    chip("A/D divergence", accum.bullishDivergence ? "Bullish" : "—", accum.bullishDivergence ? "buy" : ""),
+  ].join("");
+  const reasons = accum.reasons.length
+    ? `<ul class="fund-reasons">${accum.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
+    : "";
+  $("accumContent").innerHTML = `
+    <div class="accum-top">
+      <div class="accum-dial ${tone}">${accum.score}<span>/100</span></div>
+      <div class="accum-meta">
+        <div class="accum-verdict ${tone}">${esc(accum.verdict)}</div>
+        <div class="accum-sub">How much this looks like smart-money buying, from price &amp; volume behaviour.</div>
+      </div>
+    </div>
+    <div class="accum-gauge"><span class="fill ${tone}" style="width:${accum.score}%"></span></div>
+    <div class="metrics">${metrics}</div>
+    ${reasons}
+    <p class="val-source">A transparent proxy from Coinbase premium + Accumulation/Distribution + volume absorption — <b>not</b> literal on-chain wallet data. Educational, not financial advice.</p>`;
+}
+
+function renderFearGreed(fg) {
+  const tone = fgTone(fg.value);
+  const delta = fg.prevValue != null ? fg.value - fg.prevValue : null;
+  const deltaStr = delta == null ? "" : `<span class="fg-delta ${delta >= 0 ? "buy" : "sell"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)} vs yesterday</span>`;
+  $("fgContent").innerHTML = `
+    <div class="fg-top">
+      <div class="fg-value ${tone}">${fg.value}<span>/100</span></div>
+      <div class="fg-meta">
+        <div class="fg-label ${tone}">${esc(fg.label)}</div>
+        ${deltaStr}
+      </div>
+    </div>
+    <div class="fg-gauge"><span class="fill" style="width:${fg.value}%"></span><i class="fg-marker" style="left:${fg.value}%"></i></div>
+    <div class="fg-scale"><span>Extreme Fear</span><span>Neutral</span><span>Extreme Greed</span></div>
+    <canvas id="fgSpark" class="fg-spark"></canvas>
+    <p class="fg-read">${esc(fgRead(fg.value))}</p>
+    <p class="val-source">Source: Alternative.me Crypto Fear &amp; Greed Index (market-wide, updates daily).</p>`;
+  drawFgSpark(fg.history);
+}
+
+// Tiny 30-day sparkline for the Fear & Greed history.
+function drawFgSpark(history) {
+  const cv = $("fgSpark");
+  if (!cv || !history || history.length < 2) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 300;
+  const h = 46;
+  cv.width = w * dpr;
+  cv.height = h * dpr;
+  const ctx = cv.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  const vals = history.map((d) => d.value);
+  const min = 0, max = 100;
+  const x = (i) => (i / (vals.length - 1)) * (w - 4) + 2;
+  const y = (v) => h - 4 - ((v - min) / (max - min)) * (h - 8);
+  // fear/greed band tint
+  ctx.strokeStyle = "rgba(148,163,184,0.25)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y(50)); ctx.lineTo(w, y(50)); ctx.stroke();
+  ctx.beginPath();
+  vals.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+  ctx.strokeStyle = "#f5a623";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // last point dot
+  const li = vals.length - 1;
+  ctx.beginPath();
+  ctx.arc(x(li), y(vals[li]), 3, 0, Math.PI * 2);
+  ctx.fillStyle = "#f5a623";
+  ctx.fill();
 }
 
 // ---------------- Value & Quality scorecard ----------------
