@@ -1450,6 +1450,119 @@ async function exportDoctorPng() {
   }
 }
 
+function dclamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// ---- Screenshot → holdings (OCR) ----
+// Tesseract.js is heavy, so it's loaded lazily from a CDN only when the user
+// actually uploads an image. The app stays dependency-free until then.
+let tesseractPromise = null;
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (tesseractPromise) return tesseractPromise;
+  tesseractPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    s.async = true;
+    s.onload = () => (window.Tesseract ? resolve(window.Tesseract) : reject(new Error("OCR library failed to initialize")));
+    s.onerror = () => reject(new Error("could not load the OCR library (are you offline?)"));
+    document.head.appendChild(s);
+    setTimeout(() => { if (!window.Tesseract) reject(new Error("OCR library timed out")); }, 25000);
+  });
+  return tesseractPromise;
+}
+
+// Best-effort extraction of "TICKER qty" lines from noisy OCR text. Deliberately
+// conservative — the user reviews/edits the result before analyzing.
+const OCR_STOPWORDS = new Set([
+  "THE", "AND", "INC", "CORP", "LTD", "PLC", "CO", "USD", "USDT", "ETF", "FUND", "YOUR", "TOTAL",
+  "VALUE", "SHARES", "SHARE", "QTY", "MARKET", "GAIN", "LOSS", "TODAY", "PRICE", "COST", "AVG",
+  "ALL", "CASH", "BUY", "SELL", "OPEN", "HIGH", "LOW", "DAY", "YR", "PName ", "NAME", "TYPE",
+  "STOCK", "CRYPTO", "OPTION", "ACCOUNT", "PORTFOLIO", "HOLDINGS", "POSITIONS", "RETURN", "PL",
+]);
+function extractHoldingsFromOcr(text) {
+  const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const line of lines) {
+    const tickers = [...line.matchAll(/\b([A-Z]{1,5}(?:[.\-][A-Z]{1,4})?)\b/g)]
+      .map((m) => m[1])
+      .filter((t) => !OCR_STOPWORDS.has(t) && !/^[A-Z]$/.test(t));
+    if (!tickers.length) continue;
+    const tick = tickers[0];
+    if (seen.has(tick)) continue;
+    // numbers on the line (shares/qty is usually the first plain number)
+    const nums = [...line.matchAll(/(?<![A-Z])\$?\s?([\d]{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)/g)]
+      .map((m) => parseFloat(m[1].replace(/,/g, "")))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const qty = nums.length ? nums[0] : "";
+    seen.add(tick);
+    out.push(`${tick}${qty !== "" ? " " + qty : ""}`);
+  }
+  return out;
+}
+
+async function handleImageUpload(file) {
+  const msg = $("ocrMsg");
+  msg.className = "ocr-msg";
+  msg.textContent = "Loading text-recognition… (first use downloads a few MB).";
+  try {
+    const T = await loadTesseract();
+    msg.textContent = "Reading your screenshot…";
+    const { data } = await T.recognize(file, "eng", {
+      logger: (m) => {
+        if (m.status === "recognizing text") msg.textContent = `Reading your screenshot… ${Math.round((m.progress || 0) * 100)}%`;
+      },
+    });
+    const found = extractHoldingsFromOcr(data && data.text);
+    if (!found.length) {
+      msg.className = "ocr-msg err";
+      msg.textContent = "Couldn't pick out tickers from that image. Try a sharper crop of just the holdings list, or type/paste them below.";
+      return;
+    }
+    const box = $("holdingsInput");
+    const existing = box.value.trim();
+    box.value = (existing ? existing + "\n" : "") + found.join("\n");
+    try { localStorage.setItem("signaldesk_doctor_holdings", box.value); } catch {}
+    msg.className = "ocr-msg ok";
+    msg.textContent = `Found ${found.length} ticker${found.length > 1 ? "s" : ""} — please check the quantities below (OCR isn't perfect), then hit Analyze.`;
+  } catch (e) {
+    msg.className = "ocr-msg err";
+    msg.textContent = "Screenshot reading unavailable: " + e.message + ". You can still paste tickers or upload a CSV.";
+  }
+}
+
+// ---- Sell-priority ranking (which to sell first) ----
+// Blends the technical signal, portfolio concentration, and the accumulation/
+// distribution radar into a 0–100 "sell sooner" score.
+function sellPriority(r) {
+  if (!r.ok) return -1;
+  let p = dclamp(50 - r.score * 0.6, 0, 100); // bearish signal → higher
+  if (r.weight != null && r.weight > 0.2) p += dclamp((r.weight - 0.2) * 200, 0, 25); // concentration
+  if (r.rec.verdict === "SELL") p += 15;
+  else if (r.rec.verdict === "TRIM") p += 8;
+  if (r.accum && r.accum.available) {
+    if (r.accum.score <= 40) p += dclamp((45 - r.accum.score) * 0.5, 0, 15); // distribution
+    else if (r.accum.score >= 60) p -= dclamp((r.accum.score - 55) * 0.4, 0, 12); // accumulating → hold
+  }
+  return dclamp(Math.round(p), 0, 100);
+}
+function sellReasons(r) {
+  const out = [];
+  if (r.score <= -18) out.push(`Bearish signal (${r.score})`);
+  else if (r.score < 18) out.push("Weak / mixed signal");
+  if (r.weight != null && r.weight > 0.25) out.push(`Overweight ${(r.weight * 100).toFixed(0)}%`);
+  if (r.accum && r.accum.available && r.accum.score <= 40) out.push(`Money leaving (radar ${r.accum.score})`);
+  if (!out.length) out.push("Trimming candidate");
+  return out;
+}
+function sellSuggestion(r) {
+  if (r.rec.verdict === "SELL") return "Exit / sell";
+  if (r.weight != null && r.weight > 0.25) return "Trim toward ≤20%";
+  return "Trim / reduce";
+}
+
 let doctorBusy = false;
 async function runDoctor() {
   if (doctorBusy) return;
@@ -1473,7 +1586,10 @@ async function runDoctor() {
       const res = analyze(candles);
       const price = res.price;
       const value = h.hasValue ? h.value : h.hasShares ? h.shares * price : null;
-      return { ...h, price, value, score: res.score, action: res.action, ok: true };
+      // accumulation/distribution read (cheap, pure from the candles we just fetched)
+      let accum = null;
+      try { accum = accumulationScore(candles); } catch { /* ignore */ }
+      return { ...h, price, value, score: res.score, action: res.action, accum, ok: true };
     } catch (e) {
       return { ...h, ok: false, error: e.message };
     }
@@ -1489,7 +1605,9 @@ async function runDoctor() {
   const analyzed = rows.map((r) => {
     if (!r.ok) return { ...r, weight: null, rec: { verdict: "N/A", tone: "neutral", reason: "Couldn't fetch data for this symbol — check the ticker." } };
     const weight = weightOf(r);
-    return { ...r, weight, type: assetType(r.symbol), rec: recommend(r.score, weight) };
+    const withRec = { ...r, weight, type: assetType(r.symbol), rec: recommend(r.score, weight) };
+    withRec.sellP = sellPriority(withRec);
+    return withRec;
   });
   analyzed.sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
@@ -1553,7 +1671,60 @@ function renderDoctor(rows, totalValue) {
       <div class="report-brand"><span class="spark">▲</span> SignalDesk · Portfolio Doctor</div>
       <div class="report-date">${rows.length} holdings · ${new Date().toLocaleString()}</div>
     </div>`;
-  $("doctorResults").innerHTML = header + summary + table;
+  $("doctorResults").innerHTML = header + summary + sellSection(rows) + table;
+  wireDoctorRowClicks($("doctorResults"));
+}
+
+// The "best to sell first" ranked area — the headline of the report.
+function sellSection(rows) {
+  const candidates = rows
+    .filter((r) => r.ok && (r.sellP >= 55 || r.rec.verdict === "SELL" || r.rec.verdict === "TRIM"))
+    .sort((a, b) => b.sellP - a.sellP)
+    .slice(0, 6);
+
+  if (!candidates.length) {
+    return `<div class="sell-board sell-board-clear">
+      <h2>🔻 Best to sell first</h2>
+      <p class="sell-clear-note">✅ Nothing is screaming “sell” right now — every holding's signal is at least neutral and no position looks like it's being distributed. Keep your stops in place and re-check after big moves.</p>
+    </div>`;
+  }
+
+  const items = candidates
+    .map((r, i) => {
+      const tone = r.sellP >= 70 ? "sell" : "warn";
+      const chips = sellReasons(r).map((c) => `<span class="sell-chip">${esc(c)}</span>`).join("");
+      return `<div class="sell-row" data-sym="${esc(r.symbol)}">
+        <div class="sell-rank">${i + 1}</div>
+        <div class="sell-main">
+          <div class="sell-line1"><span class="sell-sym">${esc(r.symbol)}</span>
+            <span class="sell-type">${esc(r.type || "")}</span>
+            <span class="dv dv-${r.rec.verdict.toLowerCase()}">${r.rec.verdict}</span>
+            <span class="sell-action">${esc(sellSuggestion(r))}</span></div>
+          <div class="sell-chips">${chips}</div>
+        </div>
+        <div class="sell-meter" title="Sell-priority ${r.sellP}/100">
+          <div class="sell-meter-bar"><span class="fill ${tone}" style="width:${r.sellP}%"></span></div>
+          <span class="sell-p">${r.sellP}</span>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="sell-board">
+    <h2>🔻 Best to sell first</h2>
+    <p class="sell-sub">Ranked by a blend of bearish signal, over-concentration, and money flowing out (accumulation/distribution). Higher = consider selling sooner. Tap a row to open the full analysis. <b>Not financial advice.</b></p>
+    ${items}
+  </div>`;
+}
+
+function wireDoctorRowClicks(container) {
+  container.querySelectorAll(".sell-row").forEach((el) => {
+    el.onclick = () => {
+      $("symbol").value = el.dataset.sym;
+      switchTab("analyze");
+      run();
+    };
+  });
 }
 
 function diversificationNote(types, topWeight, divScore) {
@@ -2315,6 +2486,11 @@ window.addEventListener("DOMContentLoaded", () => {
       $("holdingsInput").value = String(reader.result || "");
     };
     reader.readAsText(file);
+  });
+  $("imgFile").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) handleImageUpload(file);
+    e.target.value = ""; // allow re-uploading the same file
   });
   $("loadSampleBtn").addEventListener("click", () => {
     $("holdingsInput").value = "AAPL 60\nNVDA 40\nMSFT 30\nVOO 25\nSCHD 200\nTSLA 50\nBTC-USD 0.4";

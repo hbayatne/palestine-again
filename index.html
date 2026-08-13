@@ -278,9 +278,10 @@
 
       <!-- ============ PORTFOLIO DOCTOR ============ -->
       <section id="tab-doctor" class="tabview hidden">
-        <p class="section-intro">Paste your real holdings (or upload a broker CSV) and get a <b>Keep / Trim / Add</b>
-          read on each position, plus diversification and concentration checks. It analyzes every holding at live
-          prices with the same signal engine. <b>Educational only — not financial advice.</b></p>
+        <p class="section-intro">Snap a <b>screenshot of your brokerage holdings</b>, upload a CSV, or paste tickers —
+          and get a <b>Keep / Trim / Sell</b> read on each position, a ranked <b>“best to sell first”</b> list, plus
+          diversification and concentration checks. Every holding is analyzed at live prices with the same signal
+          engine. <b>Educational only — not financial advice.</b></p>
 
         <div class="card">
           <h2>Your holdings</h2>
@@ -290,12 +291,14 @@ VOO 1200
 SCHD, 400
 BTC-USD 0.5
 
-…or paste a broker CSV with Symbol / Quantity / Market Value columns."></textarea>
+…or upload a screenshot / broker CSV (Symbol · Quantity · Market Value)."></textarea>
           <div class="doctor-actions">
+            <label class="btn-ghost file-btn">📸 Upload screenshot<input type="file" id="imgFile" accept="image/*" hidden /></label>
             <label class="btn-ghost file-btn">Upload CSV<input type="file" id="csvFile" accept=".csv,.txt" hidden /></label>
             <button id="loadSampleBtn" class="btn-ghost">Load sample</button>
             <button id="runDoctor" class="btn-buy">Analyze my portfolio</button>
           </div>
+          <div id="ocrMsg" class="ocr-msg"></div>
         </div>
 
         <div class="doctor-export hidden" id="doctorExport">
