@@ -52,12 +52,17 @@ console.log(sig.action === "NO_TRADE" ? `NO_TRADE — ${sig.reason}` : sig.plan)
 if (sig.action !== "NO_TRADE")
   console.log(`  confidence ${sig.confidence} | R:R ${sig.riskReward} | ADX ${sig.adx} | vol ${sig.volumeVsAvg}x`);
 
-// 2) Full walk-forward backtest.
-const res = backtest(candles, { equity: 1000, feePct: 0.001, requireRetest: false });
-console.log("\n=== Backtest scorecard ===");
-const { tradeLog, ...stats } = res;
-for (const [k, v] of Object.entries(stats)) console.log(`  ${k.padEnd(16)} ${v}`);
-console.log(`\n  (${tradeLog.length} trades; showing last 5)`);
-for (const t of tradeLog.slice(-5))
-  console.log(`   ${t.side} ${t.setup} entry ${t.entry} -> ${t.outcome} ${t.exit} | ${t.rMultiple}R | $${t.pnl}`);
+// 2) Walk-forward backtest — A/B: fixed stop+target vs. profit-protection.
+const fixed = backtest(candles, { equity: 1000, feePct: 0.001, manage: false });
+const managed = backtest(candles, { equity: 1000, feePct: 0.001, manage: true });
+
+console.log("\n=== Backtest A/B: fixed exit  vs  breakeven+trail+scale-out ===");
+const keys = ["trades", "winRate", "expectancyR", "profitFactor", "maxDrawdownPct", "returnPct"];
+console.log(`  ${"metric".padEnd(15)} ${"fixed".padStart(10)} ${"managed".padStart(10)}`);
+for (const k of keys)
+  console.log(`  ${k.padEnd(15)} ${String(fixed[k]).padStart(10)} ${String(managed[k]).padStart(10)}`);
+
+console.log(`\n  managed trades (last 5 of ${managed.tradeLog.length}):`);
+for (const t of managed.tradeLog.slice(-5))
+  console.log(`   ${t.side} ${t.setup} @${t.entry} -> ${t.outcome} ${t.exit}${t.scaledOut ? " (scaled)" : ""} | ${t.rMultiple}R | $${t.pnl}`);
 console.log();
