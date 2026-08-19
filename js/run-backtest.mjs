@@ -52,17 +52,23 @@ console.log(sig.action === "NO_TRADE" ? `NO_TRADE — ${sig.reason}` : sig.plan)
 if (sig.action !== "NO_TRADE")
   console.log(`  confidence ${sig.confidence} | R:R ${sig.riskReward} | ADX ${sig.adx} | vol ${sig.volumeVsAvg}x`);
 
-// 2) Walk-forward backtest — A/B: fixed stop+target vs. profit-protection.
-const fixed = backtest(candles, { equity: 1000, feePct: 0.001, manage: false });
-const managed = backtest(candles, { equity: 1000, feePct: 0.001, manage: true });
+// 2) Walk-forward backtest — 3-way: fixed target vs ATR trail vs structure trail.
+const base = { equity: 1000, feePct: 0.001 };
+const variants = {
+  "fixed": backtest(candles, { ...base, manage: false }),
+  "atr-trail": backtest(candles, { ...base, manage: true, mgmt: { trailMode: "atr" } }),
+  "struct-trail": backtest(candles, { ...base, manage: true, tightenStop: true, mgmt: { trailMode: "structure" } }),
+};
 
-console.log("\n=== Backtest A/B: fixed exit  vs  breakeven+trail+scale-out ===");
+console.log("\n=== Backtest: exit-style comparison ===");
 const keys = ["trades", "winRate", "expectancyR", "profitFactor", "maxDrawdownPct", "returnPct"];
-console.log(`  ${"metric".padEnd(15)} ${"fixed".padStart(10)} ${"managed".padStart(10)}`);
+const names = Object.keys(variants);
+console.log(`  ${"metric".padEnd(15)} ${names.map((n) => n.padStart(13)).join("")}`);
 for (const k of keys)
-  console.log(`  ${k.padEnd(15)} ${String(fixed[k]).padStart(10)} ${String(managed[k]).padStart(10)}`);
+  console.log(`  ${k.padEnd(15)} ${names.map((n) => String(variants[n][k]).padStart(13)).join("")}`);
 
-console.log(`\n  managed trades (last 5 of ${managed.tradeLog.length}):`);
-for (const t of managed.tradeLog.slice(-5))
+const st = variants["struct-trail"];
+console.log(`\n  structure-trail trades (last 5 of ${st.tradeLog.length}):`);
+for (const t of st.tradeLog.slice(-5))
   console.log(`   ${t.side} ${t.setup} @${t.entry} -> ${t.outcome} ${t.exit}${t.scaledOut ? " (scaled)" : ""} | ${t.rMultiple}R | $${t.pnl}`);
 console.log();

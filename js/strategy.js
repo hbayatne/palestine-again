@@ -17,6 +17,7 @@
 
 import * as ta from "./indicators.js";
 import { structure, detectPatterns } from "./patterns.js";
+import { swingStop } from "./trade-manager.js";
 
 export const DEFAULTS = {
   riskPct: 0.01,        // risk 1% of equity per trade ($10 on $1,000)
@@ -29,6 +30,8 @@ export const DEFAULTS = {
   maxRiskPerShareFrac: 0.15, // reject if stop is > 15% away (pattern too loose)
   pivotLeft: 3,
   pivotRight: 3,
+  tightenStop: false,   // true = place initial stop at nearest swing level (tighter)
+  minStopAtrMult: 0.5,  // ...but never tighter than this many ATRs (avoid noise)
 };
 
 // candles: [{time, open, high, low, close, volume}], equity: account $ available.
@@ -104,6 +107,19 @@ export function evaluate(candles, equity, userOpts = {}) {
   let stop = event.invalidation;
   if (stop == null || (long && stop >= price) || (!long && stop <= price)) {
     stop = long ? price - 1.5 * atr : price + 1.5 * atr; // fallback: 1.5x ATR
+  }
+  // Optional: tighten the initial stop to the nearest DEFENDED swing level
+  // (an analyzed level) when that is closer than the pattern boundary but still
+  // leaves a sane minimum distance — smaller drawdown per trade without sitting
+  // inside the noise.
+  if (o.tightenStop) {
+    const minStop = (o.minStopAtrMult ?? 0.5) * atr;
+    const sw = swingStop({ side: long ? "LONG" : "SHORT", entry: price }, candles, o, atr);
+    if (sw != null) {
+      const dist = Math.abs(price - sw);
+      const tighter = long ? sw > stop && sw < price : sw < stop && sw > price;
+      if (tighter && dist >= minStop) stop = sw;
+    }
   }
   const riskPerShare = Math.abs(price - stop);
   if (riskPerShare <= 0) return no("Degenerate stop (zero risk distance).");
