@@ -31,6 +31,7 @@ import {
   accumulationScore,
   accumulationOpportunity,
 } from "./sentiment.js";
+import { computeEdge, edgeAdjustedConfidence, computeRegime } from "./edge.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -130,7 +131,8 @@ const RANKER_DEFAULT = [
 ];
 const ALL_PRESETS = PRESET_GROUPS.flatMap((g) => g.items);
 
-const TF_LABELS = { "15m": "15 min", "1h": "1 hour", "4h": "4 hour", "1d": "Daily", "1w": "Weekly" };
+const TF_LABELS = { "15m": "15 min", "1h": "1 hour", "4h": "4 hour", "1d": "Daily", "1w": "Weekly", "1M": "Monthly" };
+const EDGE_HORIZON = { "15m": 16, "1h": 12, "4h": 10, "1d": 10, "1w": 4, "1M": 3 };
 
 const $ = (id) => document.getElementById(id);
 const state = { candles: [], result: null, fundamentals: null };
@@ -218,6 +220,89 @@ async function run() {
 
   // Market sentiment & accumulation (crypto) — loads async, non-blocking.
   loadSentiment(symbol, tier, result);
+
+  // Edge analytics (historical backtest of this signal) — deferred so it never
+  // blocks the first paint.
+  loadEdge(symbol, tier, interval, result);
+}
+
+// ---------------- Edge analytics ----------------
+let edgeReqId = 0;
+function loadEdge(symbol, tier, interval, result) {
+  const card = $("edgeCard");
+  if (!card) return;
+  if (!tier.confidence) {           // edge analytics are a Lite+ perk
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  // Market regime is cheap — render it immediately.
+  const regime = computeRegime(result);
+  renderRegime(regime);
+
+  $("edgeContent").innerHTML = `<p class="status loading">Back-testing this signal on ${state.candles.length} bars of history…</p>`;
+  const myReq = ++edgeReqId;
+  const candles = state.candles;
+  const horizon = EDGE_HORIZON[interval] || 10;
+  const voters = tier.voters === "all" ? undefined : tier.voters;
+
+  // Defer the CPU-heavy backtest to the next tick so the UI stays responsive.
+  setTimeout(() => {
+    if (myReq !== edgeReqId) return;
+    let edge;
+    try {
+      edge = computeEdge(candles, (slice) => analyze(slice, { voters }), { horizon });
+    } catch (e) {
+      edge = { available: false, reason: "Edge calculation failed." };
+    }
+    if (myReq !== edgeReqId) return;
+    renderEdge(edge, result, interval);
+  }, 30);
+}
+
+function renderRegime(regime) {
+  const el = $("edgeRegime");
+  if (!el) return;
+  const bits = [`<span class="er-pill ${regime.tone}">${esc(regime.trend)}</span>`];
+  if (regime.vol) bits.push(`<span class="er-pill">Volatility: ${regime.vol}${regime.atrPct != null ? ` (ATR ${regime.atrPct.toFixed(1)}%)` : ""}</span>`);
+  if (regime.adx != null) bits.push(`<span class="er-pill">ADX ${regime.adx.toFixed(0)}</span>`);
+  el.innerHTML = bits.join("");
+}
+
+function renderEdge(edge, result, interval) {
+  const c = $("edgeContent");
+  const tf = TF_LABELS[interval] || interval;
+  if (!edge || !edge.available) {
+    c.innerHTML = `<p class="val-empty-note">${esc((edge && edge.reason) || "Edge unavailable for this asset/timeframe.")}</p>`;
+    return;
+  }
+  if (!edge.directional) {
+    c.innerHTML = `<p class="edge-note">${esc(edge.note)}</p>
+      <p class="val-source">Measured over ${edge.n} past bars · ${esc(tf)} · ${edge.horizon}-bar horizon. In-sample estimate — not a guarantee.</p>`;
+    return;
+  }
+  const adjConf = edgeAdjustedConfidence(result.confidence, edge);
+  const dirWord = edge.curDir > 0 ? "bullish" : "bearish";
+  const pct = (v) => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+  const metrics = [
+    chip("Hit rate", (edge.hitRate * 100).toFixed(0) + "%", edge.hitRate >= 0.55 ? "buy" : edge.hitRate < 0.45 ? "sell" : "warn"),
+    chip("Expectancy / signal", pct(edge.expectancy), edge.expectancy > 0 ? "buy" : "sell"),
+    chip("Avg favorable", pct(edge.avgFav), "buy"),
+    chip("Avg adverse", pct(edge.avgUnfav), "sell"),
+    chip("Reward : risk", edge.payoff != null ? edge.payoff.toFixed(2) + " : 1" : "—"),
+    chip("Sample size", edge.n + " signals"),
+  ].join("");
+  c.innerHTML = `
+    <div class="edge-top">
+      <div class="edge-badge ${edge.tone}">${esc(edge.label)}</div>
+      <div class="edge-headline">Over the last ${state.candles.length} ${esc(tf.toLowerCase())} bars, when the signal was
+        <b>${dirWord}</b> like now, price moved its way <b>${(edge.hitRate * 100).toFixed(0)}%</b> of the time
+        ${edge.horizon} bars later — average <b>${pct(edge.expectancy)}</b> per signal.</div>
+    </div>
+    <div class="metrics">${metrics}</div>
+    <div class="edge-conf">Model confidence <b>${result.confidence}%</b> → edge-adjusted <b class="${adjConf >= result.confidence ? "buy" : "sell"}">${adjConf}%</b></div>
+    <p class="val-source">In-sample backtest on this asset's recent ${esc(tf.toLowerCase())} history (${edge.n} matching signals, ${edge.horizon}-bar horizon). Past behaviour is not a promise — signals still fail. Not financial advice.</p>`;
 }
 
 // ---------------- Fear & Greed + Accumulation Radar ----------------

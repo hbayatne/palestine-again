@@ -30,6 +30,7 @@ export const INTERVALS = {
   "4h": "4h",
   "1d": "1d",
   "1w": "1w",
+  "1M": "1M",
 };
 
 // Tries several public exchanges in order so a regional block on one (e.g.
@@ -90,7 +91,8 @@ async function fromBinance(symbol, interval, limit) {
 const CB_GRAN = { "15m": 900, "1h": 3600, "4h": 21600, "1d": 86400, "1w": 86400 };
 async function fromCoinbase(symbol, interval, limit) {
   const product = toDashPair(symbol);
-  const gran = CB_GRAN[interval] || 86400;
+  const gran = CB_GRAN[interval];
+  if (!gran) throw new Error(`interval ${interval} unsupported`); // e.g. monthly → let Yahoo handle it
   const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=${gran}`;
   const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
@@ -113,7 +115,8 @@ async function fromCoinbase(symbol, interval, limit) {
 const KR_MIN = { "15m": 15, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080 };
 async function fromKraken(symbol, interval, limit) {
   const pair = toKrakenPair(symbol);
-  const mins = KR_MIN[interval] || 1440;
+  const mins = KR_MIN[interval];
+  if (!mins) throw new Error(`interval ${interval} unsupported`); // e.g. monthly → let Yahoo handle it
   const url = `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${mins}`;
   const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
@@ -161,6 +164,7 @@ const YF_MAP = {
   "4h": { i: "60m", r: "1y", agg: 4 }, // Yahoo has no 4h; aggregate 4×1h
   "1d": { i: "1d", r: "2y", agg: 1 },
   "1w": { i: "1wk", r: "5y", agg: 1 },
+  "1M": { i: "1mo", r: "10y", agg: 1 },
 };
 
 // BTCUSDT -> BTC-USD for Yahoo; other symbols (AAPL, EURUSD=X, GC=F, ^GSPC) pass through.
