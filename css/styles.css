@@ -708,3 +708,21 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .sell-meter-bar .fill.warn { background: var(--hold); }
 .sell-p { font-size: 12px; font-weight: 700; color: var(--muted); width: 22px; text-align: right; }
 @media (max-width: 560px) { .sell-meter { width: 64px; } .sell-p { display: none; } }
+
+/* ===== Edge analytics ===== */
+.edge-regime { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: 8px; vertical-align: middle; }
+.er-pill { font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--panel2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; }
+.er-pill.buy { color: var(--buy); border-color: rgba(22,199,132,0.4); }
+.er-pill.sell { color: var(--sell); border-color: rgba(226,55,68,0.4); }
+.er-pill.warn { color: var(--hold); border-color: rgba(209,183,58,0.4); }
+.edge-top { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+.edge-badge { flex: none; font-weight: 800; font-size: 13px; padding: 9px 12px; border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--border); text-align: center; }
+.edge-badge.buy { color: var(--buy); border-color: rgba(22,199,132,0.45); }
+.edge-badge.sell { color: var(--sell); border-color: rgba(226,55,68,0.45); }
+.edge-badge.warn { color: var(--hold); border-color: rgba(209,183,58,0.45); }
+.edge-headline { font-size: 13px; line-height: 1.5; color: var(--fg, #e6ebf2); }
+.edge-note { font-size: 13px; line-height: 1.55; color: var(--muted); }
+.edge-conf { font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
+.edge-conf b { color: var(--fg, #e6ebf2); } .edge-conf b.buy { color: var(--buy); } .edge-conf b.sell { color: var(--sell); }

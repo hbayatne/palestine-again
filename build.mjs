@@ -20,6 +20,7 @@ const MODULE_ORDER = [
   "js/valuation.js",
   "js/data.js",
   "js/sentiment.js",
+  "js/edge.js",
   "js/news.js",
   "js/signals.js",
   "js/app.js",

@@ -716,6 +716,24 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .sell-p { font-size: 12px; font-weight: 700; color: var(--muted); width: 22px; text-align: right; }
 @media (max-width: 560px) { .sell-meter { width: 64px; } .sell-p { display: none; } }
 
+/* ===== Edge analytics ===== */
+.edge-regime { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: 8px; vertical-align: middle; }
+.er-pill { font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--panel2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; }
+.er-pill.buy { color: var(--buy); border-color: rgba(22,199,132,0.4); }
+.er-pill.sell { color: var(--sell); border-color: rgba(226,55,68,0.4); }
+.er-pill.warn { color: var(--hold); border-color: rgba(209,183,58,0.4); }
+.edge-top { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+.edge-badge { flex: none; font-weight: 800; font-size: 13px; padding: 9px 12px; border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--border); text-align: center; }
+.edge-badge.buy { color: var(--buy); border-color: rgba(22,199,132,0.45); }
+.edge-badge.sell { color: var(--sell); border-color: rgba(226,55,68,0.45); }
+.edge-badge.warn { color: var(--hold); border-color: rgba(209,183,58,0.45); }
+.edge-headline { font-size: 13px; line-height: 1.5; color: var(--fg, #e6ebf2); }
+.edge-note { font-size: 13px; line-height: 1.55; color: var(--muted); }
+.edge-conf { font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
+.edge-conf b { color: var(--fg, #e6ebf2); } .edge-conf b.buy { color: var(--buy); } .edge-conf b.sell { color: var(--sell); }
+
 </style>
 </head>
 <body>
@@ -857,6 +875,11 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
             <div class="card chart-card hidden" id="plainEnglishCard">
               <h2>📖 Plain-English summary</h2>
               <p id="plainEnglish" class="plain-english"></p>
+            </div>
+
+            <div class="card hidden" id="edgeCard">
+              <h2>🎯 Edge analytics <span id="edgeRegime" class="edge-regime"></span></h2>
+              <div id="edgeContent"></div>
             </div>
 
             <div class="card hidden" id="fgCard">
@@ -1383,7 +1406,7 @@ const TIERS = {
     priceNote: "/month",
     tagline: "For the active trader.",
     voters: ["trend", "rsi", "macd", "stoch", "bollinger", "emaCross"],
-    timeframes: ["1h", "4h", "1d", "1w"],
+    timeframes: ["1h", "4h", "1d", "1w", "1M"],
     confidence: true,
     tradePlan: true,
     fundamentals: false,
@@ -1398,9 +1421,10 @@ const TIERS = {
       "6 indicators",
       "Confidence score",
       "ATR trade plan (entry / stop / target)",
-      "Hourly → weekly timeframes",
+      "Hourly → monthly timeframes",
       "Income & Growth screener",
       "Fear & Greed + Accumulation Radar",
+      "Edge analytics (historical hit-rate & expectancy)",
     ],
     locked: ["Fundamentals analysis", "Plain-English summary", "Paper-trading simulator"],
   },
@@ -1411,7 +1435,7 @@ const TIERS = {
     priceNote: "/month",
     tagline: "The full trading desk.",
     voters: "all",
-    timeframes: ["15m", "1h", "4h", "1d", "1w"],
+    timeframes: ["15m", "1h", "4h", "1d", "1w", "1M"],
     confidence: true,
     tradePlan: true,
     fundamentals: true,
@@ -2133,6 +2157,7 @@ const INTERVALS = {
   "4h": "4h",
   "1d": "1d",
   "1w": "1w",
+  "1M": "1M",
 };
 
 // Tries several public exchanges in order so a regional block on one (e.g.
@@ -2193,7 +2218,8 @@ async function fromBinance(symbol, interval, limit) {
 const CB_GRAN = { "15m": 900, "1h": 3600, "4h": 21600, "1d": 86400, "1w": 86400 };
 async function fromCoinbase(symbol, interval, limit) {
   const product = toDashPair(symbol);
-  const gran = CB_GRAN[interval] || 86400;
+  const gran = CB_GRAN[interval];
+  if (!gran) throw new Error(`interval ${interval} unsupported`); // e.g. monthly → let Yahoo handle it
   const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=${gran}`;
   const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
@@ -2216,7 +2242,8 @@ async function fromCoinbase(symbol, interval, limit) {
 const KR_MIN = { "15m": 15, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080 };
 async function fromKraken(symbol, interval, limit) {
   const pair = toKrakenPair(symbol);
-  const mins = KR_MIN[interval] || 1440;
+  const mins = KR_MIN[interval];
+  if (!mins) throw new Error(`interval ${interval} unsupported`); // e.g. monthly → let Yahoo handle it
   const url = `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=${mins}`;
   const res = await tfetch(url);
   if (!res.ok) throw new Error(`${res.status}`);
@@ -2264,6 +2291,7 @@ const YF_MAP = {
   "4h": { i: "60m", r: "1y", agg: 4 }, // Yahoo has no 4h; aggregate 4×1h
   "1d": { i: "1d", r: "2y", agg: 1 },
   "1w": { i: "1wk", r: "5y", agg: 1 },
+  "1M": { i: "1mo", r: "10y", agg: 1 },
 };
 
 // BTCUSDT -> BTC-USD for Yahoo; other symbols (AAPL, EURUSD=X, GC=F, ^GSPC) pass through.
@@ -3090,6 +3118,148 @@ function accumulationOpportunity(accum, action) {
 }
 
 
+// edge.js — historical "edge" analytics and market-regime detection.
+//
+// computeEdge walks the loaded candles, re-runs the SAME signal engine at each
+// past bar, and measures what actually happened `horizon` bars later. That turns
+// the live signal into an honest, testable statistic: when this asset last
+// flashed a signal in this direction, how often did price move the signal's way,
+// and by how much? It is an in-sample estimate on one asset's recent history —
+// a sanity check on the edge, not a promise about the future.
+//
+// computeRegime labels the current market state (trend vs. range, volatility)
+// from indicators the signal already computed, at no extra cost.
+
+function mean(xs) {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+}
+
+// analyzeFn(candlesSlice) must return an object with a numeric `.score`
+// (i.e. the real analyze() bound to the current tier's voter set).
+function computeEdge(candles, analyzeFn, opts = {}) {
+  const horizon = opts.horizon || 10;
+  const warmup = Math.min(opts.warmup || 200, Math.floor(candles.length * 0.5));
+  const minSamples = opts.minSamples || 12;
+
+  if (!Array.isArray(candles) || candles.length < warmup + horizon + minSamples)
+    return { available: false, reason: "Not enough price history to measure an edge at this timeframe." };
+
+  // Current signal direction (what the user is looking at right now).
+  let curScore;
+  try {
+    curScore = analyzeFn(candles).score;
+  } catch {
+    return { available: false, reason: "Signal could not be evaluated." };
+  }
+  const curDir = curScore >= 18 ? 1 : curScore <= -18 ? -1 : 0;
+
+  // Backtest: at each historical bar, score the signal and record the forward move.
+  const samples = [];
+  for (let i = warmup; i < candles.length - horizon; i++) {
+    let s;
+    try {
+      s = analyzeFn(candles.slice(0, i + 1)).score;
+    } catch {
+      continue;
+    }
+    const c0 = candles[i].close;
+    const cN = candles[i + horizon].close;
+    if (!(c0 > 0)) continue;
+    const dir = s >= 18 ? 1 : s <= -18 ? -1 : 0;
+    samples.push({ dir, fwd: (cN - c0) / c0 });
+  }
+
+  if (curDir === 0)
+    return {
+      available: true,
+      directional: false,
+      horizon,
+      curScore,
+      n: samples.filter((x) => x.dir === 0).length,
+      note: "The signal is neutral right now, so there's no directional edge to measure. Historically, neutral readings resolve either way — wait for a clearer signal.",
+    };
+
+  // Only samples where the historical signal agreed with the current direction.
+  const dirSamples = samples.filter((x) => x.dir === curDir);
+  if (dirSamples.length < minSamples)
+    return { available: false, reason: `Only ${dirSamples.length} past ${curDir > 0 ? "bullish" : "bearish"} signals on this history — too few to estimate an edge.` };
+
+  // "Favorable" = price moved in the signal's direction.
+  const signed = dirSamples.map((x) => x.fwd * curDir);
+  const wins = signed.filter((v) => v > 0);
+  const losses = signed.filter((v) => v <= 0);
+  const hitRate = wins.length / signed.length;
+  const avgFav = wins.length ? mean(wins) : 0;
+  const avgUnfav = losses.length ? mean(losses) : 0; // <= 0
+  const expectancy = mean(signed); // avg return per signal, in the signal's favor
+  const payoff = avgUnfav !== 0 ? Math.abs(avgFav / avgUnfav) : null;
+
+  // Qualitative edge label from expectancy + hit-rate.
+  let label, tone;
+  if (expectancy > 0.002 && hitRate >= 0.55) {
+    label = "Positive edge";
+    tone = "buy";
+  } else if (expectancy > 0 && hitRate >= 0.5) {
+    label = "Slight edge";
+    tone = "warn";
+  } else if (expectancy <= -0.002 || hitRate < 0.45) {
+    label = "No historical edge";
+    tone = "sell";
+  } else {
+    label = "Neutral / coin-flip";
+    tone = "warn";
+  }
+
+  return {
+    available: true,
+    directional: true,
+    horizon,
+    curScore,
+    curDir,
+    n: signed.length,
+    hitRate,
+    avgFav,
+    avgUnfav,
+    expectancy,
+    payoff,
+    label,
+    tone,
+  };
+}
+
+// Blend the model's confidence with the historical hit-rate into one number.
+function edgeAdjustedConfidence(modelConfidence, edge) {
+  if (!edge || !edge.available || !edge.directional) return modelConfidence;
+  const hist = edge.hitRate * 100;
+  return Math.round(Math.max(0, Math.min(100, modelConfidence * 0.6 + hist * 0.4)));
+}
+
+// Label the market state from indicators the signal already produced.
+function computeRegime(result) {
+  const s = result.snapshot || {};
+  const adx = result.adx ? result.adx.adx : null;
+  const price = result.price;
+  const up = s.sma50 != null && s.sma200 != null ? s.sma50 > s.sma200 : s.sma20 != null && s.sma50 != null ? s.sma20 > s.sma50 : null;
+
+  let trend, tone;
+  if (adx != null && adx >= 25) {
+    trend = up ? "Strong uptrend" : "Strong downtrend";
+    tone = up ? "buy" : "sell";
+  } else if (adx != null && adx < 18) {
+    trend = "Ranging / choppy";
+    tone = "warn";
+  } else {
+    trend = up == null ? "Undefined" : up ? "Weak uptrend" : "Weak downtrend";
+    tone = "";
+  }
+
+  const atrPct = s.atr != null && price ? (s.atr / price) * 100 : null;
+  const vol = atrPct == null ? null : atrPct < 1.5 ? "Low" : atrPct < 4 ? "Normal" : "High";
+
+  return { trend, tone, adx, atrPct, vol, up };
+}
+
+
 // news.js — fetches recent market headlines for the scrolling ticker.
 // Crypto: CryptoCompare public news API (CORS-enabled, no key).
 // Stocks: Yahoo Finance RSS headline feed via CORS proxies.
@@ -3682,7 +3852,8 @@ const RANKER_DEFAULT = [
 ];
 const ALL_PRESETS = PRESET_GROUPS.flatMap((g) => g.items);
 
-const TF_LABELS = { "15m": "15 min", "1h": "1 hour", "4h": "4 hour", "1d": "Daily", "1w": "Weekly" };
+const TF_LABELS = { "15m": "15 min", "1h": "1 hour", "4h": "4 hour", "1d": "Daily", "1w": "Weekly", "1M": "Monthly" };
+const EDGE_HORIZON = { "15m": 16, "1h": 12, "4h": 10, "1d": 10, "1w": 4, "1M": 3 };
 
 const $ = (id) => document.getElementById(id);
 const state = { candles: [], result: null, fundamentals: null };
@@ -3770,6 +3941,89 @@ async function run() {
 
   // Market sentiment & accumulation (crypto) — loads async, non-blocking.
   loadSentiment(symbol, tier, result);
+
+  // Edge analytics (historical backtest of this signal) — deferred so it never
+  // blocks the first paint.
+  loadEdge(symbol, tier, interval, result);
+}
+
+// ---------------- Edge analytics ----------------
+let edgeReqId = 0;
+function loadEdge(symbol, tier, interval, result) {
+  const card = $("edgeCard");
+  if (!card) return;
+  if (!tier.confidence) {           // edge analytics are a Lite+ perk
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  // Market regime is cheap — render it immediately.
+  const regime = computeRegime(result);
+  renderRegime(regime);
+
+  $("edgeContent").innerHTML = `<p class="status loading">Back-testing this signal on ${state.candles.length} bars of history…</p>`;
+  const myReq = ++edgeReqId;
+  const candles = state.candles;
+  const horizon = EDGE_HORIZON[interval] || 10;
+  const voters = tier.voters === "all" ? undefined : tier.voters;
+
+  // Defer the CPU-heavy backtest to the next tick so the UI stays responsive.
+  setTimeout(() => {
+    if (myReq !== edgeReqId) return;
+    let edge;
+    try {
+      edge = computeEdge(candles, (slice) => analyze(slice, { voters }), { horizon });
+    } catch (e) {
+      edge = { available: false, reason: "Edge calculation failed." };
+    }
+    if (myReq !== edgeReqId) return;
+    renderEdge(edge, result, interval);
+  }, 30);
+}
+
+function renderRegime(regime) {
+  const el = $("edgeRegime");
+  if (!el) return;
+  const bits = [`<span class="er-pill ${regime.tone}">${esc(regime.trend)}</span>`];
+  if (regime.vol) bits.push(`<span class="er-pill">Volatility: ${regime.vol}${regime.atrPct != null ? ` (ATR ${regime.atrPct.toFixed(1)}%)` : ""}</span>`);
+  if (regime.adx != null) bits.push(`<span class="er-pill">ADX ${regime.adx.toFixed(0)}</span>`);
+  el.innerHTML = bits.join("");
+}
+
+function renderEdge(edge, result, interval) {
+  const c = $("edgeContent");
+  const tf = TF_LABELS[interval] || interval;
+  if (!edge || !edge.available) {
+    c.innerHTML = `<p class="val-empty-note">${esc((edge && edge.reason) || "Edge unavailable for this asset/timeframe.")}</p>`;
+    return;
+  }
+  if (!edge.directional) {
+    c.innerHTML = `<p class="edge-note">${esc(edge.note)}</p>
+      <p class="val-source">Measured over ${edge.n} past bars · ${esc(tf)} · ${edge.horizon}-bar horizon. In-sample estimate — not a guarantee.</p>`;
+    return;
+  }
+  const adjConf = edgeAdjustedConfidence(result.confidence, edge);
+  const dirWord = edge.curDir > 0 ? "bullish" : "bearish";
+  const pct = (v) => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+  const metrics = [
+    chip("Hit rate", (edge.hitRate * 100).toFixed(0) + "%", edge.hitRate >= 0.55 ? "buy" : edge.hitRate < 0.45 ? "sell" : "warn"),
+    chip("Expectancy / signal", pct(edge.expectancy), edge.expectancy > 0 ? "buy" : "sell"),
+    chip("Avg favorable", pct(edge.avgFav), "buy"),
+    chip("Avg adverse", pct(edge.avgUnfav), "sell"),
+    chip("Reward : risk", edge.payoff != null ? edge.payoff.toFixed(2) + " : 1" : "—"),
+    chip("Sample size", edge.n + " signals"),
+  ].join("");
+  c.innerHTML = `
+    <div class="edge-top">
+      <div class="edge-badge ${edge.tone}">${esc(edge.label)}</div>
+      <div class="edge-headline">Over the last ${state.candles.length} ${esc(tf.toLowerCase())} bars, when the signal was
+        <b>${dirWord}</b> like now, price moved its way <b>${(edge.hitRate * 100).toFixed(0)}%</b> of the time
+        ${edge.horizon} bars later — average <b>${pct(edge.expectancy)}</b> per signal.</div>
+    </div>
+    <div class="metrics">${metrics}</div>
+    <div class="edge-conf">Model confidence <b>${result.confidence}%</b> → edge-adjusted <b class="${adjConf >= result.confidence ? "buy" : "sell"}">${adjConf}%</b></div>
+    <p class="val-source">In-sample backtest on this asset's recent ${esc(tf.toLowerCase())} history (${edge.n} matching signals, ${edge.horizon}-bar horizon). Past behaviour is not a promise — signals still fail. Not financial advice.</p>`;
 }
 
 // ---------------- Fear & Greed + Accumulation Radar ----------------
