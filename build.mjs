@@ -21,6 +21,7 @@ const MODULE_ORDER = [
   "js/data.js",
   "js/sentiment.js",
   "js/edge.js",
+  "js/divergence.js",
   "js/news.js",
   "js/signals.js",
   "js/app.js",

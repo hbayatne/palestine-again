@@ -726,3 +726,25 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .edge-note { font-size: 13px; line-height: 1.55; color: var(--muted); }
 .edge-conf { font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
 .edge-conf b { color: var(--fg, #e6ebf2); } .edge-conf b.buy { color: var(--buy); } .edge-conf b.sell { color: var(--sell); }
+
+/* ===== RSI divergence engine ===== */
+.div-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; margin-left: 8px;
+  vertical-align: middle; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); }
+.div-badge.buy { color: var(--buy); border-color: rgba(22,199,132,0.45); }
+.div-badge.sell { color: var(--sell); border-color: rgba(226,55,68,0.45); }
+.div-badge.warn { color: var(--hold); border-color: rgba(209,183,58,0.45); }
+.div-viz { width: 100%; height: 150px; display: block; margin: 4px 0 12px; }
+.div-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.div-headline { font-size: 16px; font-weight: 800; }
+.div-headline.buy { color: var(--buy); } .div-headline.sell { color: var(--sell); } .div-headline.warn { color: var(--hold); }
+.div-strength { font-size: 12px; color: var(--muted); }
+.div-facts { display: grid; gap: 6px; margin-bottom: 10px; }
+.div-facts > div { display: flex; gap: 10px; font-size: 13px; }
+.div-facts .dk { flex: none; width: 88px; color: var(--muted); }
+.div-facts .dv { font-weight: 600; } .div-facts .dvm { color: var(--muted); font-weight: 400; }
+.div-meaning { font-size: 13px; line-height: 1.55; color: var(--fg, #e6ebf2); margin: 0 0 10px; }
+.div-none { font-size: 13px; line-height: 1.55; color: var(--muted); }
+.div-others { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.div-chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 6px;
+  background: var(--panel2); border: 1px solid var(--border); margin-right: 4px; }
+.div-chip.buy { color: var(--buy); } .div-chip.sell { color: var(--sell); } .div-chip.warn { color: var(--hold); }
