@@ -734,6 +734,28 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .edge-conf { font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
 .edge-conf b { color: var(--fg, #e6ebf2); } .edge-conf b.buy { color: var(--buy); } .edge-conf b.sell { color: var(--sell); }
 
+/* ===== RSI divergence engine ===== */
+.div-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; margin-left: 8px;
+  vertical-align: middle; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); }
+.div-badge.buy { color: var(--buy); border-color: rgba(22,199,132,0.45); }
+.div-badge.sell { color: var(--sell); border-color: rgba(226,55,68,0.45); }
+.div-badge.warn { color: var(--hold); border-color: rgba(209,183,58,0.45); }
+.div-viz { width: 100%; height: 150px; display: block; margin: 4px 0 12px; }
+.div-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.div-headline { font-size: 16px; font-weight: 800; }
+.div-headline.buy { color: var(--buy); } .div-headline.sell { color: var(--sell); } .div-headline.warn { color: var(--hold); }
+.div-strength { font-size: 12px; color: var(--muted); }
+.div-facts { display: grid; gap: 6px; margin-bottom: 10px; }
+.div-facts > div { display: flex; gap: 10px; font-size: 13px; }
+.div-facts .dk { flex: none; width: 88px; color: var(--muted); }
+.div-facts .dv { font-weight: 600; } .div-facts .dvm { color: var(--muted); font-weight: 400; }
+.div-meaning { font-size: 13px; line-height: 1.55; color: var(--fg, #e6ebf2); margin: 0 0 10px; }
+.div-none { font-size: 13px; line-height: 1.55; color: var(--muted); }
+.div-others { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.div-chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 6px;
+  background: var(--panel2); border: 1px solid var(--border); margin-right: 4px; }
+.div-chip.buy { color: var(--buy); } .div-chip.sell { color: var(--sell); } .div-chip.warn { color: var(--hold); }
+
 </style>
 </head>
 <body>
@@ -880,6 +902,12 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
             <div class="card hidden" id="edgeCard">
               <h2>🎯 Edge analytics <span id="edgeRegime" class="edge-regime"></span></h2>
               <div id="edgeContent"></div>
+            </div>
+
+            <div class="card chart-card hidden" id="divCard">
+              <h2>🔀 RSI divergences <span id="divBadge" class="div-badge"></span></h2>
+              <canvas id="divViz" class="div-viz"></canvas>
+              <div id="divContent"></div>
             </div>
 
             <div class="card hidden" id="fgCard">
@@ -3260,6 +3288,167 @@ function computeRegime(result) {
 }
 
 
+// divergence.js — RSI divergence detection with honest classification.
+//
+// Divergence = price and momentum (RSI) disagree. Four kinds:
+//   • Regular bearish : price higher high,  RSI lower high   → up-move losing steam
+//   • Regular bullish : price lower low,    RSI higher low    → down-move losing steam
+//   • Hidden bearish  : price lower high,   RSI higher high   → downtrend continuation
+//   • Hidden bullish  : price higher low,   RSI lower low     → uptrend continuation
+//
+// Detection uses proper swing-pivot detection (a bar that is the local extreme
+// over `width` bars on each side), not naive adjacent-bar comparisons, and
+// applies configurable magnitude/separation thresholds so noise doesn't count.
+//
+// Crucially it does NOT call every divergence a reversal. Regular divergence
+// against a strong trend is flagged as a MOMENTUM WARNING (trends routinely
+// absorb one divergence); only in a weakening/rangebound context is it called a
+// POTENTIAL REVERSAL. Hidden divergences are labelled trend-continuation.
+
+const DEFAULTS = {
+  width: 3,          // bars on each side that define a swing pivot
+  lookback: 120,     // how many recent bars to scan
+  minRsiDiff: 3,     // minimum RSI differential between the two pivots
+  minPriceDiffPct: 0.3, // minimum % price differential
+  minSeparation: 5,  // min bars between the two pivots
+  maxSeparation: 60, // max bars between the two pivots
+  maxBarsAgo: 15,    // the later pivot must be this recent to be "active"
+};
+
+function pivotIndices(vals, width, kind) {
+  const out = [];
+  for (let i = width; i < vals.length - width; i++) {
+    const v = vals[i];
+    if (v == null) continue;
+    let isPivot = true;
+    for (let k = 1; k <= width; k++) {
+      if (kind === "high") {
+        if (!(v >= vals[i - k]) || !(v >= vals[i + k])) { isPivot = false; break; }
+      } else {
+        if (!(v <= vals[i - k]) || !(v <= vals[i + k])) { isPivot = false; break; }
+      }
+    }
+    if (isPivot) out.push(i);
+  }
+  return out;
+}
+
+function strengthOf(rsiDiff, priceDiffPct, sep, opts) {
+  const rsiMag = Math.min(1, Math.abs(rsiDiff) / 15);
+  const priceMag = Math.min(1, Math.abs(priceDiffPct) / 5);
+  // separation is best mid-band; extremes (too tight / too wide) score lower
+  const mid = (opts.minSeparation + opts.maxSeparation) / 2;
+  const sepScore = 1 - Math.min(1, Math.abs(sep - mid) / (opts.maxSeparation - opts.minSeparation));
+  return Math.round(100 * (0.5 * rsiMag + 0.3 * priceMag + 0.2 * sepScore));
+}
+
+// context: { trendUp: bool|null, adx: number|null } — drives reversal vs warning.
+function classify(kind, direction, context) {
+  const strongTrend = context && context.adx != null && context.adx >= 25;
+  if (kind === "hidden") {
+    return {
+      tag: "Trend continuation",
+      tone: direction === "bullish" ? "buy" : "sell",
+      meaning: direction === "bullish"
+        ? "Momentum held up better than price on the pullback — a continuation signal in an uptrend."
+        : "Momentum stayed weaker than price on the bounce — a continuation signal in a downtrend.",
+    };
+  }
+  // regular divergence
+  const counterTrend =
+    (direction === "bearish" && context && context.trendUp === true) ||
+    (direction === "bullish" && context && context.trendUp === false);
+  if (strongTrend && counterTrend) {
+    return {
+      tag: "Momentum warning",
+      tone: "warn",
+      meaning: "The trend is still strong, so this reads as momentum cooling — not a confirmed reversal. Strong trends often absorb one divergence before turning.",
+    };
+  }
+  return {
+    tag: "Potential reversal",
+    tone: direction === "bullish" ? "buy" : "sell",
+    meaning: direction === "bullish"
+      ? "Selling pressure is fading at the lows while the broader trend isn't strongly down — a possible bottoming signal. Confirm with a break of structure."
+      : "Buying pressure is fading at the highs while the broader trend isn't strongly up — a possible topping signal. Confirm with a break of structure.",
+  };
+}
+
+// candles: [{high,low,close,time}], rsi: aligned RSI array, context optional.
+function detectDivergences(candles, rsi, context = {}, options = {}) {
+  const opts = { ...DEFAULTS, ...options };
+  if (!Array.isArray(candles) || !Array.isArray(rsi) || candles.length < opts.width * 2 + opts.minSeparation + 2)
+    return { available: false, reason: "Not enough price history for divergence analysis.", all: [], primary: null };
+
+  const n = candles.length;
+  const from = Math.max(opts.width, n - opts.lookback);
+  const highs = candles.map((c) => c.high);
+  const lows = candles.map((c) => c.low);
+
+  const hiPivots = pivotIndices(highs, opts.width, "high").filter((i) => i >= from && rsi[i] != null);
+  const loPivots = pivotIndices(lows, opts.width, "low").filter((i) => i >= from && rsi[i] != null);
+
+  const found = [];
+
+  const consider = (a, b, priceArr, useHigh) => {
+    const sep = b - a;
+    if (sep < opts.minSeparation || sep > opts.maxSeparation) return;
+    const p1 = priceArr[a], p2 = priceArr[b];
+    const r1 = rsi[a], r2 = rsi[b];
+    if (p1 == null || p2 == null || r1 == null || r2 == null) return;
+    const priceDiffPct = ((p2 - p1) / p1) * 100;
+    const rsiDiff = r2 - r1;
+    if (Math.abs(rsiDiff) < opts.minRsiDiff || Math.abs(priceDiffPct) < opts.minPriceDiffPct) return;
+
+    let kind = null, direction = null;
+    if (useHigh) {
+      // pivot highs → bearish family
+      if (p2 > p1 && r2 < r1) { kind = "regular"; direction = "bearish"; }
+      else if (p2 < p1 && r2 > r1) { kind = "hidden"; direction = "bearish"; }
+    } else {
+      // pivot lows → bullish family
+      if (p2 < p1 && r2 > r1) { kind = "regular"; direction = "bullish"; }
+      else if (p2 > p1 && r2 < r1) { kind = "hidden"; direction = "bullish"; }
+    }
+    if (!kind) return;
+
+    const cls = classify(kind, direction, context);
+    const label = `${kind === "hidden" ? "Hidden" : "Regular"} ${direction}`;
+    found.push({
+      kind, direction, label,
+      idx1: a, idx2: b,
+      t1: candles[a].time, t2: candles[b].time,
+      price1: p1, price2: p2, rsi1: r1, rsi2: r2,
+      priceDiffPct, rsiDiff,
+      bars: sep,
+      barsAgo: n - 1 - b,
+      strength: strengthOf(rsiDiff, priceDiffPct, sep, opts),
+      classification: cls.tag,
+      tone: cls.tone,
+      meaning: cls.meaning,
+      pivotKind: useHigh ? "high" : "low",
+    });
+  };
+
+  // Compare each pivot with the most recent earlier pivots (within maxSeparation).
+  for (let j = 1; j < hiPivots.length; j++)
+    for (let i = j - 1; i >= 0 && hiPivots[j] - hiPivots[i] <= opts.maxSeparation; i--)
+      consider(hiPivots[i], hiPivots[j], highs, true);
+  for (let j = 1; j < loPivots.length; j++)
+    for (let i = j - 1; i >= 0 && loPivots[j] - loPivots[i] <= opts.maxSeparation; i--)
+      consider(loPivots[i], loPivots[j], lows, false);
+
+  // Sort newest+strongest first.
+  found.sort((a, b) => b.idx2 - a.idx2 || b.strength - a.strength);
+
+  // "Active" divergences = later pivot is recent.
+  const active = found.filter((d) => d.barsAgo <= opts.maxBarsAgo);
+  const primary = (active[0] || null);
+
+  return { available: true, all: found, active, primary };
+}
+
+
 // news.js — fetches recent market headlines for the scrolling ticker.
 // Crypto: CryptoCompare public news API (CORS-enabled, no key).
 // Stocks: Yahoo Finance RSS headline feed via CORS proxies.
@@ -4393,8 +4582,139 @@ function render(r, symbol, tier) {
     fundWrap.classList.add("hidden");
   }
 
+  renderDivergence(r, tier);
   buildChartTf(tier);
   scheduleChart(state.candles, r.indicators);
+}
+
+// ---------------- RSI divergence engine ----------------
+function renderDivergence(r, tier) {
+  const card = $("divCard");
+  if (!card) return;
+  if (!tier.confidence) { card.classList.add("hidden"); return; } // Lite+ analytics
+
+  const rsi = r.indicators && r.indicators.rsi;
+  const candles = state.candles;
+  if (!Array.isArray(rsi) || !Array.isArray(candles) || candles.length < 20) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  const trendUp = r.snapshot.sma50 != null && r.snapshot.sma200 != null
+    ? r.snapshot.sma50 > r.snapshot.sma200
+    : r.snapshot.sma20 != null && r.snapshot.sma50 != null ? r.snapshot.sma20 > r.snapshot.sma50 : null;
+  const context = { trendUp, adx: r.adx ? r.adx.adx : null };
+
+  const det = detectDivergences(candles, rsi, context);
+  const badge = $("divBadge");
+  const content = $("divContent");
+
+  if (!det.available) {
+    badge.textContent = "";
+    content.innerHTML = `<p class="val-empty-note">${esc(det.reason || "Divergence analysis unavailable.")}</p>`;
+    drawDivViz(candles, rsi, null);
+    return;
+  }
+
+  const p = det.primary;
+  if (!p) {
+    badge.className = "div-badge";
+    badge.textContent = "None active";
+    const recent = det.all.slice(0, 1)[0];
+    content.innerHTML = `<p class="div-none">No active RSI divergence on the recent swings. Price and momentum are broadly in agreement here${
+      recent ? ` — the last one (${esc(recent.label.toLowerCase())}) was ${recent.barsAgo} bars ago.` : "."
+    }</p>
+    <p class="val-source">Regular divergence = momentum disagreeing with price (early warning). Hidden divergence = trend-continuation. Educational, not financial advice.</p>`;
+    drawDivViz(candles, rsi, null);
+    return;
+  }
+
+  badge.className = "div-badge " + p.tone;
+  badge.textContent = `${p.classification}`;
+
+  const pricePhrase = p.pivotKind === "high"
+    ? (p.price2 > p.price1 ? "higher high" : "lower high")
+    : (p.price2 < p.price1 ? "lower low" : "higher low");
+  const rsiPhrase = p.rsi2 > p.rsi1 ? "higher" : "lower";
+  const rsiWord = p.pivotKind === "high" ? `${rsiPhrase} high` : `${rsiPhrase} low`;
+  const others = det.active.filter((d) => d !== p).slice(0, 3);
+
+  content.innerHTML = `
+    <div class="div-top">
+      <div class="div-headline ${p.tone}">${esc(p.label)} divergence</div>
+      <div class="div-strength">Strength <b>${p.strength}/100</b> · latest swing ${p.barsAgo} bar${p.barsAgo === 1 ? "" : "s"} ago</div>
+    </div>
+    <div class="div-facts">
+      <div><span class="dk">Price</span><span class="dv">${esc(pricePhrase)} &nbsp;$${fmt(p.price1)} → $${fmt(p.price2)} <span class="dvm">(${p.priceDiffPct >= 0 ? "+" : ""}${p.priceDiffPct.toFixed(1)}%)</span></span></div>
+      <div><span class="dk">RSI</span><span class="dv">${esc(rsiWord)} &nbsp;${p.rsi1.toFixed(0)} → ${p.rsi2.toFixed(0)} <span class="dvm">(${p.rsiDiff >= 0 ? "+" : ""}${p.rsiDiff.toFixed(0)})</span></span></div>
+      <div><span class="dk">Key levels</span><span class="dv">$${fmt(Math.min(p.price1, p.price2))} · $${fmt(Math.max(p.price1, p.price2))}</span></div>
+    </div>
+    <p class="div-meaning">${esc(p.meaning)}</p>
+    ${others.length ? `<div class="div-others"><span class="dk">Also active:</span> ${others.map((d) => `<span class="div-chip ${d.tone}">${esc(d.label)} · ${d.strength}</span>`).join(" ")}</div>` : ""}
+    <p class="val-source">Detected from swing pivots (width 3) over the last ${Math.min(120, candles.length)} bars. A divergence is a momentum clue, not a guarantee — confirm with price action. Not financial advice.</p>`;
+
+  drawDivViz(candles, rsi, p);
+}
+
+// Self-contained price + RSI mini-chart with the primary divergence marked.
+function drawDivViz(candles, rsi, prim) {
+  const cv = $("divViz");
+  if (!cv) return;
+  const win = Math.min(120, candles.length);
+  const start = candles.length - win;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 600;
+  const h = 150;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const closes = candles.slice(start).map((c) => c.close);
+  const rs = rsi.slice(start);
+  const pH = 92, rTop = 104, rH = 42; // price panel / rsi panel geometry
+  const pMin = Math.min(...closes), pMax = Math.max(...closes);
+  const xAt = (i) => (i / (win - 1)) * (w - 8) + 4;
+  const pyAt = (v) => 8 + (pH - 12) * (1 - (v - pMin) / (pMax - pMin || 1));
+  const ryAt = (v) => rTop + (rH) * (1 - (v == null ? 0.5 : v / 100));
+
+  // price line
+  ctx.beginPath();
+  closes.forEach((v, i) => (i ? ctx.lineTo(xAt(i), pyAt(v)) : ctx.moveTo(xAt(i), pyAt(v))));
+  ctx.strokeStyle = "#8a94a6"; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // RSI 30/70 guides + line
+  ctx.strokeStyle = "rgba(148,163,184,0.18)"; ctx.lineWidth = 1;
+  [30, 50, 70].forEach((lvl) => { ctx.beginPath(); ctx.moveTo(0, ryAt(lvl)); ctx.lineTo(w, ryAt(lvl)); ctx.stroke(); });
+  ctx.beginPath();
+  let started = false;
+  rs.forEach((v, i) => {
+    if (v == null) return;
+    if (!started) { ctx.moveTo(xAt(i), ryAt(v)); started = true; } else ctx.lineTo(xAt(i), ryAt(v));
+  });
+  ctx.strokeStyle = "#4c9aff"; ctx.lineWidth = 1.5; ctx.stroke();
+
+  if (prim) {
+    const color = prim.tone === "buy" ? "#16c784" : prim.tone === "sell" ? "#e23744" : "#d1b73a";
+    const a = prim.idx1 - start, b = prim.idx2 - start;
+    if (a >= 0 && b >= 0) {
+      const pa = prim.pivotKind === "high" ? candles[prim.idx1].high : candles[prim.idx1].low;
+      const pb = prim.pivotKind === "high" ? candles[prim.idx2].high : candles[prim.idx2].low;
+      // price divergence line
+      ctx.beginPath(); ctx.moveTo(xAt(a), pyAt(pa)); ctx.lineTo(xAt(b), pyAt(pb));
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke();
+      // rsi divergence line
+      ctx.beginPath(); ctx.moveTo(xAt(a), ryAt(prim.rsi1)); ctx.lineTo(xAt(b), ryAt(prim.rsi2));
+      ctx.stroke(); ctx.setLineDash([]);
+      // pivot dots
+      [[xAt(a), pyAt(pa)], [xAt(b), pyAt(pb)], [xAt(a), ryAt(prim.rsi1)], [xAt(b), ryAt(prim.rsi2)]].forEach(([x, y]) => {
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+      });
+    }
+  }
+  ctx.fillStyle = "#8a94a6"; ctx.font = "10px system-ui, sans-serif";
+  ctx.fillText("Price", 4, 12); ctx.fillText("RSI", 4, rTop - 2);
 }
 
 // Draw on the next frame (after layout) and never let a draw error blank the UI.

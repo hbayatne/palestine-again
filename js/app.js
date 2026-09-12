@@ -32,6 +32,7 @@ import {
   accumulationOpportunity,
 } from "./sentiment.js";
 import { computeEdge, edgeAdjustedConfidence, computeRegime } from "./edge.js";
+import { detectDivergences } from "./divergence.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -672,8 +673,139 @@ function render(r, symbol, tier) {
     fundWrap.classList.add("hidden");
   }
 
+  renderDivergence(r, tier);
   buildChartTf(tier);
   scheduleChart(state.candles, r.indicators);
+}
+
+// ---------------- RSI divergence engine ----------------
+function renderDivergence(r, tier) {
+  const card = $("divCard");
+  if (!card) return;
+  if (!tier.confidence) { card.classList.add("hidden"); return; } // Lite+ analytics
+
+  const rsi = r.indicators && r.indicators.rsi;
+  const candles = state.candles;
+  if (!Array.isArray(rsi) || !Array.isArray(candles) || candles.length < 20) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+
+  const trendUp = r.snapshot.sma50 != null && r.snapshot.sma200 != null
+    ? r.snapshot.sma50 > r.snapshot.sma200
+    : r.snapshot.sma20 != null && r.snapshot.sma50 != null ? r.snapshot.sma20 > r.snapshot.sma50 : null;
+  const context = { trendUp, adx: r.adx ? r.adx.adx : null };
+
+  const det = detectDivergences(candles, rsi, context);
+  const badge = $("divBadge");
+  const content = $("divContent");
+
+  if (!det.available) {
+    badge.textContent = "";
+    content.innerHTML = `<p class="val-empty-note">${esc(det.reason || "Divergence analysis unavailable.")}</p>`;
+    drawDivViz(candles, rsi, null);
+    return;
+  }
+
+  const p = det.primary;
+  if (!p) {
+    badge.className = "div-badge";
+    badge.textContent = "None active";
+    const recent = det.all.slice(0, 1)[0];
+    content.innerHTML = `<p class="div-none">No active RSI divergence on the recent swings. Price and momentum are broadly in agreement here${
+      recent ? ` — the last one (${esc(recent.label.toLowerCase())}) was ${recent.barsAgo} bars ago.` : "."
+    }</p>
+    <p class="val-source">Regular divergence = momentum disagreeing with price (early warning). Hidden divergence = trend-continuation. Educational, not financial advice.</p>`;
+    drawDivViz(candles, rsi, null);
+    return;
+  }
+
+  badge.className = "div-badge " + p.tone;
+  badge.textContent = `${p.classification}`;
+
+  const pricePhrase = p.pivotKind === "high"
+    ? (p.price2 > p.price1 ? "higher high" : "lower high")
+    : (p.price2 < p.price1 ? "lower low" : "higher low");
+  const rsiPhrase = p.rsi2 > p.rsi1 ? "higher" : "lower";
+  const rsiWord = p.pivotKind === "high" ? `${rsiPhrase} high` : `${rsiPhrase} low`;
+  const others = det.active.filter((d) => d !== p).slice(0, 3);
+
+  content.innerHTML = `
+    <div class="div-top">
+      <div class="div-headline ${p.tone}">${esc(p.label)} divergence</div>
+      <div class="div-strength">Strength <b>${p.strength}/100</b> · latest swing ${p.barsAgo} bar${p.barsAgo === 1 ? "" : "s"} ago</div>
+    </div>
+    <div class="div-facts">
+      <div><span class="dk">Price</span><span class="dv">${esc(pricePhrase)} &nbsp;$${fmt(p.price1)} → $${fmt(p.price2)} <span class="dvm">(${p.priceDiffPct >= 0 ? "+" : ""}${p.priceDiffPct.toFixed(1)}%)</span></span></div>
+      <div><span class="dk">RSI</span><span class="dv">${esc(rsiWord)} &nbsp;${p.rsi1.toFixed(0)} → ${p.rsi2.toFixed(0)} <span class="dvm">(${p.rsiDiff >= 0 ? "+" : ""}${p.rsiDiff.toFixed(0)})</span></span></div>
+      <div><span class="dk">Key levels</span><span class="dv">$${fmt(Math.min(p.price1, p.price2))} · $${fmt(Math.max(p.price1, p.price2))}</span></div>
+    </div>
+    <p class="div-meaning">${esc(p.meaning)}</p>
+    ${others.length ? `<div class="div-others"><span class="dk">Also active:</span> ${others.map((d) => `<span class="div-chip ${d.tone}">${esc(d.label)} · ${d.strength}</span>`).join(" ")}</div>` : ""}
+    <p class="val-source">Detected from swing pivots (width 3) over the last ${Math.min(120, candles.length)} bars. A divergence is a momentum clue, not a guarantee — confirm with price action. Not financial advice.</p>`;
+
+  drawDivViz(candles, rsi, p);
+}
+
+// Self-contained price + RSI mini-chart with the primary divergence marked.
+function drawDivViz(candles, rsi, prim) {
+  const cv = $("divViz");
+  if (!cv) return;
+  const win = Math.min(120, candles.length);
+  const start = candles.length - win;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 600;
+  const h = 150;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const closes = candles.slice(start).map((c) => c.close);
+  const rs = rsi.slice(start);
+  const pH = 92, rTop = 104, rH = 42; // price panel / rsi panel geometry
+  const pMin = Math.min(...closes), pMax = Math.max(...closes);
+  const xAt = (i) => (i / (win - 1)) * (w - 8) + 4;
+  const pyAt = (v) => 8 + (pH - 12) * (1 - (v - pMin) / (pMax - pMin || 1));
+  const ryAt = (v) => rTop + (rH) * (1 - (v == null ? 0.5 : v / 100));
+
+  // price line
+  ctx.beginPath();
+  closes.forEach((v, i) => (i ? ctx.lineTo(xAt(i), pyAt(v)) : ctx.moveTo(xAt(i), pyAt(v))));
+  ctx.strokeStyle = "#8a94a6"; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // RSI 30/70 guides + line
+  ctx.strokeStyle = "rgba(148,163,184,0.18)"; ctx.lineWidth = 1;
+  [30, 50, 70].forEach((lvl) => { ctx.beginPath(); ctx.moveTo(0, ryAt(lvl)); ctx.lineTo(w, ryAt(lvl)); ctx.stroke(); });
+  ctx.beginPath();
+  let started = false;
+  rs.forEach((v, i) => {
+    if (v == null) return;
+    if (!started) { ctx.moveTo(xAt(i), ryAt(v)); started = true; } else ctx.lineTo(xAt(i), ryAt(v));
+  });
+  ctx.strokeStyle = "#4c9aff"; ctx.lineWidth = 1.5; ctx.stroke();
+
+  if (prim) {
+    const color = prim.tone === "buy" ? "#16c784" : prim.tone === "sell" ? "#e23744" : "#d1b73a";
+    const a = prim.idx1 - start, b = prim.idx2 - start;
+    if (a >= 0 && b >= 0) {
+      const pa = prim.pivotKind === "high" ? candles[prim.idx1].high : candles[prim.idx1].low;
+      const pb = prim.pivotKind === "high" ? candles[prim.idx2].high : candles[prim.idx2].low;
+      // price divergence line
+      ctx.beginPath(); ctx.moveTo(xAt(a), pyAt(pa)); ctx.lineTo(xAt(b), pyAt(pb));
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke();
+      // rsi divergence line
+      ctx.beginPath(); ctx.moveTo(xAt(a), ryAt(prim.rsi1)); ctx.lineTo(xAt(b), ryAt(prim.rsi2));
+      ctx.stroke(); ctx.setLineDash([]);
+      // pivot dots
+      [[xAt(a), pyAt(pa)], [xAt(b), pyAt(pb)], [xAt(a), ryAt(prim.rsi1)], [xAt(b), ryAt(prim.rsi2)]].forEach(([x, y]) => {
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+      });
+    }
+  }
+  ctx.fillStyle = "#8a94a6"; ctx.font = "10px system-ui, sans-serif";
+  ctx.fillText("Price", 4, 12); ctx.fillText("RSI", 4, rTop - 2);
 }
 
 // Draw on the next frame (after layout) and never let a draw error blank the UI.
