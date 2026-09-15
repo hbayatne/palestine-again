@@ -768,26 +768,32 @@ function drawDivViz(candles, rsi, prim, extras = {}) {
   if (!cv) return;
   const win = Math.min(120, candles.length);
   const start = candles.length - win;
+  const wc = candles.slice(start);
   const dpr = window.devicePixelRatio || 1;
   const w = cv.clientWidth || 600;
-  const h = 150;
+  const h = 190;
   cv.width = w * dpr; cv.height = h * dpr;
   const ctx = cv.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  const closes = candles.slice(start).map((c) => c.close);
+  const closes = wc.map((c) => c.close);
   const rs = rsi.slice(start);
-  const pH = 92, rTop = 104, rH = 42; // price panel / rsi panel geometry
-  const pMin = Math.min(...closes), pMax = Math.max(...closes);
-  const xAt = (i) => (i / (win - 1)) * (w - 8) + 4;
-  const pyAt = (v) => 8 + (pH - 12) * (1 - (v - pMin) / (pMax - pMin || 1));
-  const ryAt = (v) => rTop + (rH) * (1 - (v == null ? 0.5 : v / 100));
+  // Panel geometry with generous margins so nothing touches the edges.
+  const padTop = 18, priceH = 106, rTop = 146, rH = 38; // price 18..124, gap, rsi 146..184
+  // IMPORTANT: derive the price range from the actual highs/lows shown (pivot
+  // dots sit at highs/lows), not just closes, so no marker ever clips off-panel.
+  let pLo = Math.min(...wc.map((c) => c.low));
+  let pHi = Math.max(...wc.map((c) => c.high));
+  const padv = (pHi - pLo) * 0.08 || 1; pLo -= padv; pHi += padv;
+  const xAt = (i) => (i / (win - 1)) * (w - 12) + 6;
+  const pyAt = (v) => padTop + priceH * (1 - (v - pLo) / (pHi - pLo || 1));
+  const ryAt = (v) => rTop + 1 + (rH - 2) * (1 - (v == null ? 0.5 : Math.max(0, Math.min(100, v)) / 100));
 
   // compression tint on the price panel (coiling = calm before a move)
   if (extras.comp && extras.comp.available && extras.comp.compressing) {
     ctx.fillStyle = "rgba(76,154,255,0.08)";
-    ctx.fillRect(0, 4, w, pH);
+    ctx.fillRect(0, padTop - 6, w, priceH + 12);
   }
 
   // price line
@@ -839,7 +845,7 @@ function drawDivViz(candles, rsi, prim, extras = {}) {
     }
   }
   ctx.fillStyle = "#8a94a6"; ctx.font = "10px system-ui, sans-serif";
-  ctx.fillText("Price", 4, 12); ctx.fillText("RSI", 4, rTop - 2);
+  ctx.fillText("Price", 4, 12); ctx.fillText("RSI", 4, rTop - 3);
 }
 
 // Draw on the next frame (after layout) and never let a draw error blank the UI.
@@ -1140,6 +1146,17 @@ function drawChart(candles, ind) {
   const lows = view.map((c) => c.low);
   let max = Math.max(...highs);
   let min = Math.min(...lows);
+  // Auto-scale to include every overlay that gets drawn (SMA 20/50/200 and the
+  // Bollinger bands), so none of those lines render off the top/bottom edge.
+  for (const arr of [ind.sma20, ind.sma50, ind.sma200, ind.bollinger && ind.bollinger.upper, ind.bollinger && ind.bollinger.lower]) {
+    if (!arr) continue;
+    for (let i = 0; i < view.length; i++) {
+      const v = arr[offset + i];
+      if (v == null) continue;
+      if (v > max) max = v;
+      if (v < min) min = v;
+    }
+  }
   const padY = (max - min) * 0.08;
   max += padY;
   min -= padY;
