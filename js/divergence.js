@@ -25,6 +25,34 @@ const DEFAULTS = {
   maxBarsAgo: 15,    // the later pivot must be this recent to be "active"
 };
 
+// Exported for the quick-reference chart: recent swing pivot indices for
+// price highs and lows over the last `lookback` bars.
+export function recentPivots(candles, { width = 3, lookback = 120 } = {}) {
+  if (!Array.isArray(candles) || candles.length < width * 2 + 1) return { highs: [], lows: [] };
+  const from = Math.max(width, candles.length - lookback);
+  const highs = pivotIndices(candles.map((c) => c.high), width, "high").filter((i) => i >= from);
+  const lows = pivotIndices(candles.map((c) => c.low), width, "low").filter((i) => i >= from);
+  return { highs, lows };
+}
+
+// Bollinger band-width "compression" read: is volatility coiling? Returns a
+// percentile rank (0..1) of the current band width within the recent window
+// (low = compressed/coiling, high = expanded), plus a label.
+export function compressionState(bollinger, lookback = 120) {
+  if (!bollinger || !bollinger.upper) return { available: false };
+  const { upper, lower, mid } = bollinger;
+  const widths = [];
+  for (let i = Math.max(0, upper.length - lookback); i < upper.length; i++) {
+    if (upper[i] != null && lower[i] != null && mid[i]) widths.push({ i, w: (upper[i] - lower[i]) / mid[i] });
+  }
+  if (widths.length < 10) return { available: false };
+  const cur = widths[widths.length - 1].w;
+  const sorted = widths.map((x) => x.w).sort((a, b) => a - b);
+  const rank = sorted.filter((w) => w <= cur).length / sorted.length; // 0..1
+  const label = rank <= 0.25 ? "Compressing (coiling)" : rank >= 0.75 ? "Expanded (volatile)" : "Normal range";
+  return { available: true, rank, label, compressing: rank <= 0.25 };
+}
+
 function pivotIndices(vals, width, kind) {
   const out = [];
   for (let i = width; i < vals.length - width; i++) {

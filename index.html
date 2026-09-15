@@ -115,7 +115,7 @@
         </div>
         <div class="examples">
           Search any name or ticker — stocks, ETFs, funds, crypto, forex, commodities. Try
-          <code>AAPL</code> <code>SCHD</code> <code>VOO</code> <code>BTCUSDT</code> <code>EURUSD=X</code> <code>GC=F</code>.
+          <code>TSM</code> <code>NVDA</code> <code>SCHD</code> <code>BTCUSDT</code> <code>ZECUSDT</code> <code>GC=F</code>.
         </div>
 
         <div id="status" class="status">Loading…</div>
@@ -153,8 +153,14 @@
             </div>
 
             <div class="card chart-card hidden" id="divCard">
-              <h2>🔀 RSI divergences <span id="divBadge" class="div-badge"></span></h2>
+              <h2>🔀 RSI vs price — pivots &amp; divergence <span id="divBadge" class="div-badge"></span></h2>
               <canvas id="divViz" class="div-viz"></canvas>
+              <div class="div-legend">
+                <span><i class="lg-dot hi"></i> swing high</span>
+                <span><i class="lg-dot lo"></i> swing low</span>
+                <span><i class="lg-line"></i> divergence</span>
+                <span><i class="lg-band"></i> compression</span>
+              </div>
               <div id="divContent"></div>
             </div>
 
