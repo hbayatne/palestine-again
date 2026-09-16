@@ -784,3 +784,28 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 #tab-analyze #fundamentals { order: 10; }
 #tab-analyze #breakdownCard { order: 11; }
 #tab-analyze #valueCard { order: 12; }
+
+/* ===== Market Regime engine ===== */
+.regime-card { margin-bottom: 4px; }
+.regime-head { display: flex; align-items: center; justify-content: space-between; }
+.regime-head h2 { margin: 0; }
+#regimeRefresh { padding: 4px 10px; font-size: 14px; }
+.rg-top { display: flex; align-items: center; gap: 16px; margin: 10px 0 14px; }
+.rg-dial { flex: none; min-width: 96px; text-align: center; font-size: 34px; font-weight: 800; line-height: 1;
+  padding: 12px 10px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--border); }
+.rg-dial span { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+.rg-dial.buy { color: var(--buy); } .rg-dial.hold { color: var(--hold); } .rg-dial.sell { color: var(--sell); }
+.rg-meta { flex: 1; min-width: 0; }
+.rg-label { font-size: 20px; font-weight: 800; }
+.rg-label.buy { color: var(--buy); } .rg-label.hold { color: var(--hold); } .rg-label.sell { color: var(--sell); }
+.rg-gauge { height: 8px; border-radius: 6px; margin: 8px 0; background: var(--panel2); overflow: hidden; }
+.rg-gauge .fill { display: block; height: 100%; border-radius: 6px; }
+.rg-gauge .fill.buy { background: var(--buy); } .rg-gauge .fill.hold { background: var(--hold); } .rg-gauge .fill.sell { background: var(--sell); }
+.rg-sub { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.rg-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 8px; }
+@media (max-width: 640px) { .rg-cols { grid-template-columns: 1fr; } }
+.rg-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 6px; }
+.rg-h.buy { color: var(--buy); } .rg-h.sell { color: var(--sell); }
+.rg-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.rg-list.buy li::marker { color: var(--buy); } .rg-list.sell li::marker { color: var(--sell); }
+.rg-none { font-size: 13px; color: var(--muted); margin: 0; }

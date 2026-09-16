@@ -33,6 +33,7 @@ import {
 } from "./sentiment.js";
 import { computeEdge, edgeAdjustedConfidence, computeRegime } from "./edge.js";
 import { detectDivergences, recentPivots, compressionState } from "./divergence.js";
+import { computeMarketRegime, REGIME_SYMBOLS } from "./regime.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -872,6 +873,67 @@ function scheduleChart(candles, ind) {
       console.error("chart draw failed:", e);
     }
   });
+}
+
+// ---------------- Market Regime engine ----------------
+const REGIME_CACHE = "signaldesk_regime_v1";
+const REGIME_TTL = 30 * 60 * 1000; // 30 min — internals don't change intraday-fast
+
+async function loadMarketRegime(force = false) {
+  const card = $("regimeCard");
+  if (!card) return;
+
+  // Serve a fresh-enough cache instantly.
+  if (!force) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(REGIME_CACHE));
+      if (cached && cached.reg && Date.now() - cached.reg.asOf < REGIME_TTL) {
+        renderMarketRegime(cached.reg);
+        return;
+      }
+    } catch { /* ignore */ }
+  }
+
+  card.classList.remove("hidden");
+  $("regimeContent").innerHTML = `<p class="status loading">Reading the market's internals…</p>`;
+  const results = await mapLimit(REGIME_SYMBOLS, 5, async (sym) => {
+    try { return [sym, await fetchCandles(sym, "1d", 400)]; }
+    catch { return [sym, null]; }
+  });
+  const data = {};
+  for (const [sym, candles] of results) if (candles && candles.length) data[sym] = candles;
+
+  const reg = computeMarketRegime(data);
+  if (!reg.available) {
+    $("regimeContent").innerHTML = `<p class="val-empty-note">${esc(reg.reason || "Market regime unavailable right now.")}</p>`;
+    return;
+  }
+  try { localStorage.setItem(REGIME_CACHE, JSON.stringify({ reg })); } catch { /* ignore */ }
+  renderMarketRegime(reg);
+}
+
+function renderMarketRegime(reg) {
+  const card = $("regimeCard");
+  if (!card) return;
+  card.classList.remove("hidden");
+  const ago = Math.round((Date.now() - reg.asOf) / 60000);
+  const list = (arr, cls) => arr.length
+    ? `<ul class="rg-list ${cls}">${arr.map((f) => `<li>${esc(f.note)}</li>`).join("")}</ul>`
+    : `<p class="rg-none">—</p>`;
+  $("regimeContent").innerHTML = `
+    <div class="rg-top">
+      <div class="rg-dial ${reg.tone}">${reg.score}<span>/100</span></div>
+      <div class="rg-meta">
+        <div class="rg-label ${reg.tone}">${esc(reg.label)}</div>
+        <div class="rg-gauge"><span class="fill ${reg.tone}" style="width:${reg.score}%"></span></div>
+        <div class="rg-sub">Risk appetite across indices, breadth, volatility, credit, rates &amp; the dollar · confidence ${reg.confidence}%${ago > 1 ? ` · ${ago}m ago` : ""}</div>
+      </div>
+    </div>
+    <div class="rg-cols">
+      <div><div class="rg-h buy">Supporting risk-on</div>${list(reg.supporting, "buy")}</div>
+      <div><div class="rg-h sell">Contradicting</div>${list(reg.contradicting, "sell")}</div>
+    </div>
+    <p class="val-source">Educational market context, not financial advice. Aggregated from public index &amp; macro data; interpret as a backdrop, not a trade signal.</p>`;
 }
 
 // ---------------- News ticker ----------------
@@ -2900,9 +2962,14 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!localStorage.getItem(WELCOME_KEY)) openWelcome();
   } catch {}
 
+  // Market regime (market-wide context) — loads independently, cached 30 min.
+  const regimeRefresh = $("regimeRefresh");
+  if (regimeRefresh) regimeRefresh.addEventListener("click", () => loadMarketRegime(true));
+
   // No login gate in dev mode — go straight into the app with full access.
   hideAuth();
   applyTier();
   run();
   initNews();
+  loadMarketRegime();
 });
