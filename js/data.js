@@ -151,13 +151,48 @@ function toKrakenPair(symbol) {
 
 // --- Yahoo Finance: the universal source (stocks, ETFs, forex, indices,
 // commodities, crypto). Yahoo doesn't send CORS headers, so we route through
-// public CORS proxies and try them in order for resilience. ---
+// public CORS proxies. We RACE them in parallel (see proxyRaceJSON) rather than
+// trying them one at a time, so one dead/rate-limited proxy can't drop us to
+// demo data while a healthy one would have answered. ---
 const YF_PROXIES = [
   (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   (u) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+  (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
   (u) => u, // last resort: hit Yahoo directly (works if CORS ever allows it)
 ];
+
+// Race a request across ALL proxies (and any given target URLs) concurrently
+// and resolve with the first response that passes `validate`. This is far more
+// resilient than trying proxies one-by-one: a single slow or rate-limited proxy
+// no longer blocks the others, and the fastest healthy one wins. Retries the
+// whole race once after a short pause, since these public proxies are flaky.
+async function proxyRaceJSON(targets, validate, ms = 6000, retries = 1) {
+  const list = Array.isArray(targets) ? targets : [targets];
+  const runPass = () => {
+    const jobs = [];
+    for (const t of list) {
+      for (const wrap of YF_PROXIES) {
+        jobs.push((async () => {
+          const res = await tfetch(wrap(t), ms);
+          if (!res.ok) throw new Error(String(res.status));
+          const json = await res.json();
+          if (validate && !validate(json)) throw new Error("invalid shape");
+          return json;
+        })());
+      }
+    }
+    return Promise.any(jobs); // first job that fulfills wins
+  };
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await runPass();
+    } catch (e) {
+      if (attempt >= retries) throw new Error("all proxies failed");
+      await new Promise((r) => setTimeout(r, 500)); // brief backoff, then retry the race
+    }
+  }
+}
 const YF_MAP = {
   "15m": { i: "15m", r: "1mo", agg: 1 },
   "1h": { i: "60m", r: "3mo", agg: 1 },
@@ -176,29 +211,13 @@ function toYahooSymbol(sym) {
 async function fromYahoo(symbol, interval, limit) {
   const m = YF_MAP[interval] || YF_MAP["1d"];
   const ysym = toYahooSymbol(symbol);
-  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"];
-  let lastErr = "";
-  for (const host of hosts) {
-    const target = `https://${host}/v8/finance/chart/${encodeURIComponent(
-      ysym
-    )}?range=${m.r}&interval=${m.i}`;
-    for (const wrap of YF_PROXIES) {
-      try {
-        const res = await tfetch(wrap(target), 5000);
-        if (!res.ok) {
-          lastErr = `${res.status}`;
-          continue;
-        }
-        const json = await res.json();
-        const parsed = parseYahoo(json, m.agg, limit);
-        if (parsed && parsed.length) return parsed;
-        lastErr = "no rows";
-      } catch (e) {
-        lastErr = e.message;
-      }
-    }
-  }
-  throw new Error(lastErr || "unreachable");
+  const targets = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"].map(
+    (host) => `https://${host}/v8/finance/chart/${encodeURIComponent(ysym)}?range=${m.r}&interval=${m.i}`
+  );
+  const json = await proxyRaceJSON(targets, (j) => j && j.chart && j.chart.result && j.chart.result[0]);
+  const parsed = parseYahoo(json, m.agg, limit);
+  if (parsed && parsed.length) return parsed;
+  throw new Error("no rows");
 }
 
 // Search any asset by name or ticker (stocks, ETFs, funds, crypto, forex…).
@@ -209,26 +228,19 @@ export async function searchSymbols(query) {
   const target = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(
     q
   )}&quotesCount=10&newsCount=0`;
-  for (const wrap of YF_PROXIES) {
-    try {
-      const res = await tfetch(wrap(target), 5000);
-      if (!res.ok) continue;
-      const json = await res.json();
-      const quotes = (json && json.quotes) || [];
-      const out = quotes
-        .filter((x) => x.symbol && x.quoteType !== "OPTION")
-        .map((x) => ({
-          symbol: x.symbol,
-          name: x.shortname || x.longname || x.symbol,
-          type: (x.quoteType || "").toUpperCase(),
-          exchange: x.exchDisp || x.exchange || "",
-        }));
-      if (out.length) return out;
-    } catch {
-      /* next proxy */
-    }
+  try {
+    const json = await proxyRaceJSON(target, (j) => j && Array.isArray(j.quotes), 5000, 0);
+    return (json.quotes || [])
+      .filter((x) => x.symbol && x.quoteType !== "OPTION")
+      .map((x) => ({
+        symbol: x.symbol,
+        name: x.shortname || x.longname || x.symbol,
+        type: (x.quoteType || "").toUpperCase(),
+        exchange: x.exchDisp || x.exchange || "",
+      }));
+  } catch {
+    return [];
   }
-  return [];
 }
 
 // Latest price for a symbol (used by paper trading + watchlists). Reuses the
@@ -395,16 +407,11 @@ async function fromYahooFundamentals(sym) {
   const target = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
     sym
   )}?modules=assetProfile,financialData,defaultKeyStatistics,summaryDetail,price`;
-  let json;
-  for (const wrap of YF_PROXIES) {
-    try {
-      const res = await tfetch(wrap(target), 6000);
-      if (!res.ok) continue;
-      json = await res.json();
-      if (json && json.quoteSummary) break;
-    } catch {
-      /* next proxy */
-    }
+  let json = null;
+  try {
+    json = await proxyRaceJSON(target, (j) => j && j.quoteSummary, 6000, 0);
+  } catch {
+    /* fall through to the no-data error below */
   }
   const r = json && json.quoteSummary && json.quoteSummary.result && json.quoteSummary.result[0];
   if (!r) throw new Error("no Yahoo fundamentals");
