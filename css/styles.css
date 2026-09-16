@@ -733,7 +733,7 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .div-badge.buy { color: var(--buy); border-color: rgba(22,199,132,0.45); }
 .div-badge.sell { color: var(--sell); border-color: rgba(226,55,68,0.45); }
 .div-badge.warn { color: var(--hold); border-color: rgba(209,183,58,0.45); }
-.div-viz { width: 100%; height: 150px; display: block; margin: 4px 0 12px; }
+.div-viz { width: 100%; height: 190px; display: block; margin: 4px 0 12px; }
 .div-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .div-headline { font-size: 16px; font-weight: 800; }
 .div-headline.buy { color: var(--buy); } .div-headline.sell { color: var(--sell); } .div-headline.warn { color: var(--hold); }
@@ -748,3 +748,13 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .div-chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 6px;
   background: var(--panel2); border: 1px solid var(--border); margin-right: 4px; }
 .div-chip.buy { color: var(--buy); } .div-chip.sell { color: var(--sell); } .div-chip.warn { color: var(--hold); }
+
+/* ===== Divergence quick-reference caption + legend ===== */
+.div-caption { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.div-caption b { color: var(--fg, #e6ebf2); font-weight: 700; }
+.div-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin: 2px 0 10px; }
+.div-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lg-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.lg-dot.hi { background: var(--sell); } .lg-dot.lo { background: var(--buy); }
+.lg-line { width: 14px; height: 0; border-top: 2px dashed var(--hold); display: inline-block; }
+.lg-band { width: 12px; height: 9px; border-radius: 2px; background: rgba(76,154,255,0.18); display: inline-block; }
