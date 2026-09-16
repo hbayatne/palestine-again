@@ -123,9 +123,19 @@
         <div id="results" class="hidden">
           <div id="accumOpportunity" class="accum-callout hidden"></div>
           <div class="grid">
-            <div class="card verdict-card">
+            <div class="card verdict-card" id="verdictCard">
               <h2>Signal</h2>
               <div id="verdict" class="verdict hold">—</div>
+              <div class="buysell">
+                <div class="bs-item">
+                  <div class="bs-head"><span class="bs-label">Buy score</span><span id="buyScore" class="bs-n buy">—</span></div>
+                  <div class="bs-bar"><span id="buyBar" class="fill buy" style="width:0%"></span></div>
+                </div>
+                <div class="bs-item">
+                  <div class="bs-head"><span class="bs-label">Sell score</span><span id="sellScore" class="bs-n sell">—</span></div>
+                  <div class="bs-bar"><span id="sellBar" class="fill sell" style="width:0%"></span></div>
+                </div>
+              </div>
               <div class="verdict-stats">
                 <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
                 <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
@@ -174,7 +184,7 @@
               <div id="accumContent"></div>
             </div>
 
-            <div class="card chart-card">
+            <div class="card chart-card" id="mainChartCard">
               <div class="chart-head">
                 <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
                 <div class="chart-tools">
@@ -195,7 +205,7 @@
               <div class="chart-hint">Scroll or pinch to zoom · drag to pan · use timeframe buttons to change interval</div>
             </div>
 
-            <div class="card">
+            <div class="card" id="snapshotCard">
               <h2>Indicator snapshot</h2>
               <div id="snapshot" class="metrics"></div>
             </div>
@@ -206,7 +216,7 @@
               <ul id="fundReasons" class="fund-reasons"></ul>
             </div>
 
-            <div class="card chart-card">
+            <div class="card chart-card" id="breakdownCard">
               <h2>Why — weighted indicator breakdown</h2>
               <div id="breakdown"></div>
               <div id="adxNote" class="adx-note"></div>
