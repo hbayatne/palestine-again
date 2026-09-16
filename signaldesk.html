@@ -766,6 +766,32 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .lg-line { width: 14px; height: 0; border-top: 2px dashed var(--hold); display: inline-block; }
 .lg-band { width: 12px; height: 9px; border-radius: 2px; background: rgba(76,154,255,0.18); display: inline-block; }
 
+/* ===== Dual Buy / Sell score ===== */
+.buysell { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bs-item { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.bs-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+.bs-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bs-n { font-size: 22px; font-weight: 800; }
+.bs-n.buy { color: var(--buy); } .bs-n.sell { color: var(--sell); }
+.bs-bar { height: 7px; border-radius: 5px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.bs-bar .fill { display: block; height: 100%; border-radius: 5px; transition: width 0.3s ease; }
+.bs-bar .fill.buy { background: var(--buy); } .bs-bar .fill.sell { background: var(--sell); }
+
+/* ===== Analyze grid flow (visual order + no lone-card gaps) ===== */
+#tab-analyze .grid > * { order: 50; }
+#tab-analyze #verdictCard { order: 1; }
+#tab-analyze #planCard { order: 2; }
+#tab-analyze #plainEnglishCard { order: 3; }
+#tab-analyze #mainChartCard { order: 4; }
+#tab-analyze #divCard { order: 5; }
+#tab-analyze #edgeCard { order: 6; grid-column: 1 / -1; }  /* full width — no lone gap */
+#tab-analyze #fgCard { order: 7; }
+#tab-analyze #accumCard { order: 8; }
+#tab-analyze #snapshotCard { order: 9; }
+#tab-analyze #fundamentals { order: 10; }
+#tab-analyze #breakdownCard { order: 11; }
+#tab-analyze #valueCard { order: 12; }
+
 </style>
 </head>
 <body>
@@ -885,9 +911,19 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
         <div id="results" class="hidden">
           <div id="accumOpportunity" class="accum-callout hidden"></div>
           <div class="grid">
-            <div class="card verdict-card">
+            <div class="card verdict-card" id="verdictCard">
               <h2>Signal</h2>
               <div id="verdict" class="verdict hold">—</div>
+              <div class="buysell">
+                <div class="bs-item">
+                  <div class="bs-head"><span class="bs-label">Buy score</span><span id="buyScore" class="bs-n buy">—</span></div>
+                  <div class="bs-bar"><span id="buyBar" class="fill buy" style="width:0%"></span></div>
+                </div>
+                <div class="bs-item">
+                  <div class="bs-head"><span class="bs-label">Sell score</span><span id="sellScore" class="bs-n sell">—</span></div>
+                  <div class="bs-bar"><span id="sellBar" class="fill sell" style="width:0%"></span></div>
+                </div>
+              </div>
               <div class="verdict-stats">
                 <div><div id="scoreVal" class="n">0</div><div class="l">Score (−100…+100)</div></div>
                 <div id="confBlock"><div id="confVal" class="n">0%</div><div class="l">Confidence</div></div>
@@ -936,7 +972,7 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
               <div id="accumContent"></div>
             </div>
 
-            <div class="card chart-card">
+            <div class="card chart-card" id="mainChartCard">
               <div class="chart-head">
                 <h2>Price · SMA20/50/200 · Bollinger · RSI</h2>
                 <div class="chart-tools">
@@ -957,7 +993,7 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
               <div class="chart-hint">Scroll or pinch to zoom · drag to pan · use timeframe buttons to change interval</div>
             </div>
 
-            <div class="card">
+            <div class="card" id="snapshotCard">
               <h2>Indicator snapshot</h2>
               <div id="snapshot" class="metrics"></div>
             </div>
@@ -968,7 +1004,7 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
               <ul id="fundReasons" class="fund-reasons"></ul>
             </div>
 
-            <div class="card chart-card">
+            <div class="card chart-card" id="breakdownCard">
               <h2>Why — weighted indicator breakdown</h2>
               <div id="breakdown"></div>
               <div id="adxNote" class="adx-note"></div>
@@ -4506,6 +4542,15 @@ function render(r, symbol, tier) {
   verdict.className = "verdict " + verdictClass(r.action);
   $("scoreVal").textContent = (finalScore >= 0 ? "+" : "") + finalScore;
   $("priceVal").textContent = "$" + fmt(r.price);
+
+  // Dual Buy / Sell scores (1–50 each) — a friendlier read of the −100…+100
+  // score. They split ~50 between them: a heavy sell shows e.g. Sell 47 / Buy 3.
+  const buyScore = Math.max(1, Math.min(49, Math.round(((finalScore + 100) / 200) * 50)));
+  const sellScore = 50 - buyScore;
+  $("buyScore").textContent = buyScore + " / 50";
+  $("sellScore").textContent = sellScore + " / 50";
+  $("buyBar").style.width = (buyScore / 50) * 100 + "%";
+  $("sellBar").style.width = (sellScore / 50) * 100 + "%";
 
   // Confidence — gated
   const confWrap = $("confBlock");

@@ -554,6 +554,15 @@ function render(r, symbol, tier) {
   $("scoreVal").textContent = (finalScore >= 0 ? "+" : "") + finalScore;
   $("priceVal").textContent = "$" + fmt(r.price);
 
+  // Dual Buy / Sell scores (1–50 each) — a friendlier read of the −100…+100
+  // score. They split ~50 between them: a heavy sell shows e.g. Sell 47 / Buy 3.
+  const buyScore = Math.max(1, Math.min(49, Math.round(((finalScore + 100) / 200) * 50)));
+  const sellScore = 50 - buyScore;
+  $("buyScore").textContent = buyScore + " / 50";
+  $("sellScore").textContent = sellScore + " / 50";
+  $("buyBar").style.width = (buyScore / 50) * 100 + "%";
+  $("sellBar").style.width = (sellScore / 50) * 100 + "%";
+
   // Confidence — gated
   const confWrap = $("confBlock");
   if (tier.confidence) {

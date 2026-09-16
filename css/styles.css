@@ -758,3 +758,29 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .lg-dot.hi { background: var(--sell); } .lg-dot.lo { background: var(--buy); }
 .lg-line { width: 14px; height: 0; border-top: 2px dashed var(--hold); display: inline-block; }
 .lg-band { width: 12px; height: 9px; border-radius: 2px; background: rgba(76,154,255,0.18); display: inline-block; }
+
+/* ===== Dual Buy / Sell score ===== */
+.buysell { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bs-item { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.bs-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+.bs-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bs-n { font-size: 22px; font-weight: 800; }
+.bs-n.buy { color: var(--buy); } .bs-n.sell { color: var(--sell); }
+.bs-bar { height: 7px; border-radius: 5px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.bs-bar .fill { display: block; height: 100%; border-radius: 5px; transition: width 0.3s ease; }
+.bs-bar .fill.buy { background: var(--buy); } .bs-bar .fill.sell { background: var(--sell); }
+
+/* ===== Analyze grid flow (visual order + no lone-card gaps) ===== */
+#tab-analyze .grid > * { order: 50; }
+#tab-analyze #verdictCard { order: 1; }
+#tab-analyze #planCard { order: 2; }
+#tab-analyze #plainEnglishCard { order: 3; }
+#tab-analyze #mainChartCard { order: 4; }
+#tab-analyze #divCard { order: 5; }
+#tab-analyze #edgeCard { order: 6; grid-column: 1 / -1; }  /* full width — no lone gap */
+#tab-analyze #fgCard { order: 7; }
+#tab-analyze #accumCard { order: 8; }
+#tab-analyze #snapshotCard { order: 9; }
+#tab-analyze #fundamentals { order: 10; }
+#tab-analyze #breakdownCard { order: 11; }
+#tab-analyze #valueCard { order: 12; }
