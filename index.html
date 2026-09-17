@@ -90,6 +90,14 @@
 
       <!-- ============ ANALYZE ============ -->
       <section id="tab-analyze" class="tabview">
+        <div class="card regime-card hidden" id="regimeCard">
+          <div class="regime-head">
+            <h2>🌐 Market Regime</h2>
+            <button id="regimeRefresh" class="btn-ghost" title="Refresh market internals">↻</button>
+          </div>
+          <div id="regimeContent"></div>
+        </div>
+
         <div id="demoBanner" class="demo-banner hidden">
           ⚠️ Showing <b>demo (simulated) data</b> — your browser could not reach a live price source right now.
         </div>
