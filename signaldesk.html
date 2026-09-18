@@ -787,10 +787,11 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 #tab-analyze #edgeCard { order: 6; grid-column: 1 / -1; }  /* full width — no lone gap */
 #tab-analyze #fgCard { order: 7; }
 #tab-analyze #accumCard { order: 8; }
-#tab-analyze #snapshotCard { order: 9; }
-#tab-analyze #fundamentals { order: 10; }
-#tab-analyze #breakdownCard { order: 11; }
-#tab-analyze #valueCard { order: 12; }
+#tab-analyze #onchainCard { order: 9; }
+#tab-analyze #snapshotCard { order: 10; }
+#tab-analyze #fundamentals { order: 11; }
+#tab-analyze #breakdownCard { order: 12; }
+#tab-analyze #valueCard { order: 13; }
 
 /* ===== Market Regime engine ===== */
 .regime-card { margin-bottom: 4px; }
@@ -1003,6 +1004,11 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
             <div class="card hidden" id="accumCard">
               <h2>🐋 Accumulation Radar</h2>
               <div id="accumContent"></div>
+            </div>
+
+            <div class="card hidden" id="onchainCard">
+              <h2>⛓️ On-chain (Bitcoin)</h2>
+              <div id="onchainContent"></div>
             </div>
 
             <div class="card chart-card" id="mainChartCard">
@@ -3714,6 +3720,85 @@ function computeMarketRegime(data) {
 }
 
 
+// onchain.js — real BTC on-chain analytics from blockchain.info's public,
+// keyless charts API (CORS-enabled via ?cors=true). This is genuine network
+// data, not a price/volume proxy: how many people are actually using the
+// network, how much value is moving, and how much mining power is committed.
+//
+// Coverage is Bitcoin only — blockchain.info's charts are BTC-specific, and no
+// comparable multi-coin on-chain feed is available keyless from the browser.
+// Broader coverage (ETH, exchange netflows, whale wallets, SOPR/MVRV) needs a
+// paid provider (Glassnode/CryptoQuant) behind the backend.
+
+const BASE = "https://api.blockchain.info/charts";
+const METRICS = {
+  addresses: "n-unique-addresses",              // active addresses — adoption/usage
+  txVolumeUsd: "estimated-transaction-volume-usd", // economic throughput
+  hashRate: "hash-rate",                        // miner conviction / network security
+};
+
+function ocFetch(chart, ms = 6500) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  return fetch(`${BASE}/${chart}?timespan=180days&format=json&cors=true`, { signal: ctrl.signal })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .finally(() => clearTimeout(id));
+}
+
+// Is this symbol Bitcoin (in any of the app's notations)?
+function isBitcoin(symbol) {
+  return /^BTC(USDT|USDC|BUSD)?$/i.test(symbol) || /^BTC-USD$/i.test(symbol) || symbol === "BTC";
+}
+
+async function fetchBtcOnChain() {
+  const [a, t, h] = await Promise.all([
+    ocFetch(METRICS.addresses).catch(() => null),
+    ocFetch(METRICS.txVolumeUsd).catch(() => null),
+    ocFetch(METRICS.hashRate).catch(() => null),
+  ]);
+  const series = (j) => (j && Array.isArray(j.values) ? j.values.map((p) => ({ t: p.x * 1000, v: p.y })) : null);
+  const out = { addresses: series(a), txVolumeUsd: series(t), hashRate: series(h) };
+  if (!out.addresses && !out.txVolumeUsd && !out.hashRate) return null;
+  return out;
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+// % change over ~N daily points
+function chgN(vals, n) {
+  if (!vals || vals.length < n + 1) return null;
+  const a = vals[vals.length - 1 - n].v, b = vals[vals.length - 1].v;
+  return a ? ((b - a) / a) * 100 : null;
+}
+
+function computeBtcOnChain(series) {
+  if (!series) return { available: false, reason: "On-chain data unavailable right now." };
+  const factors = [];
+  const add = (key, label, weight, chg, scale, noteUp, noteDown, unitNote) => {
+    if (chg == null) return;
+    const vote = clamp(chg / scale, -1, 1);
+    factors.push({ key, label, weight, vote, chg, note: `${label}: ${chg >= 0 ? "+" : ""}${chg.toFixed(1)}% (30d) — ${chg > 3 ? noteUp : chg < -3 ? noteDown : "roughly flat"}${unitNote || ""}` });
+  };
+
+  add("addresses", "Active addresses", 0.4, chgN(series.addresses, 30), 20,
+    "more wallets transacting — adoption rising", "fewer active wallets — usage cooling");
+  add("txVolume", "On-chain $ volume", 0.35, chgN(series.txVolumeUsd, 30), 30,
+    "more value settling on-chain", "less value moving on-chain");
+  add("hashRate", "Hash rate", 0.25, chgN(series.hashRate, 30), 15,
+    "miners adding capacity — conviction & security up", "miners pulling back");
+
+  if (!factors.length) return { available: false, reason: "On-chain data unavailable right now." };
+
+  const wsum = factors.reduce((s, f) => s + f.weight, 0);
+  const weighted = factors.reduce((s, f) => s + f.vote * f.weight, 0) / wsum;
+  const score = clamp(Math.round(50 + weighted * 50), 0, 100);
+  const label = score >= 62 ? "Network expanding" : score >= 45 ? "Network stable" : "Network contracting";
+  const tone = score >= 62 ? "buy" : score >= 45 ? "hold" : "sell";
+  const supporting = factors.filter((f) => f.vote > 0.1).sort((a, b) => b.vote - a.vote);
+  const contradicting = factors.filter((f) => f.vote < -0.1).sort((a, b) => a.vote - b.vote);
+  return { available: true, score, label, tone, factors, supporting, contradicting };
+}
+
+
 // news.js — fetches recent market headlines for the scrolling ticker.
 // Crypto: CryptoCompare public news API (CORS-enabled, no key).
 // Stocks: Yahoo Finance RSS headline feed via CORS proxies.
@@ -4398,6 +4483,9 @@ async function run() {
   // Market sentiment & accumulation (crypto) — loads async, non-blocking.
   loadSentiment(symbol, tier, result);
 
+  // On-chain analytics (Bitcoin) — loads async, non-blocking.
+  loadOnChain(symbol, tier);
+
   // Edge analytics (historical backtest of this signal) — deferred so it never
   // blocks the first paint.
   loadEdge(symbol, tier, interval, result);
@@ -4530,6 +4618,53 @@ async function loadSentiment(symbol, tier, result) {
     if (myReq !== sentimentReqId) return;
     $("fgContent").innerHTML = `<p class="val-empty-note">Sentiment index unavailable right now (${esc(err.message)}).</p>`;
   }
+}
+
+// ---------------- On-chain analytics (Bitcoin) ----------------
+const ONCHAIN_CACHE = "signaldesk_onchain_v1";
+const ONCHAIN_TTL = 60 * 60 * 1000; // 1h — on-chain metrics are daily
+let onchainReqId = 0;
+async function loadOnChain(symbol, tier) {
+  const card = $("onchainCard");
+  if (!card) return;
+  if (!tier.sentiment || !isBitcoin(symbol)) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const myReq = ++onchainReqId;
+
+  // fresh cache?
+  try {
+    const cached = JSON.parse(localStorage.getItem(ONCHAIN_CACHE));
+    if (cached && cached.oc && Date.now() - cached.ts < ONCHAIN_TTL) { renderOnChain(cached.oc); return; }
+  } catch { /* ignore */ }
+
+  $("onchainContent").innerHTML = `<p class="status loading">Reading the Bitcoin network…</p>`;
+  const series = await fetchBtcOnChain();
+  if (myReq !== onchainReqId) return;
+  const oc = computeBtcOnChain(series);
+  if (!oc.available) {
+    $("onchainContent").innerHTML = `<p class="val-empty-note">${esc(oc.reason || "On-chain data unavailable.")}</p>`;
+    return;
+  }
+  try { localStorage.setItem(ONCHAIN_CACHE, JSON.stringify({ ts: Date.now(), oc })); } catch { /* ignore */ }
+  renderOnChain(oc);
+}
+
+function renderOnChain(oc) {
+  const chips = oc.factors
+    .map((f) => chip(f.label, (f.chg >= 0 ? "+" : "") + f.chg.toFixed(1) + "%", f.vote > 0.1 ? "buy" : f.vote < -0.1 ? "sell" : ""))
+    .join("");
+  const reasons = [...oc.supporting, ...oc.contradicting].map((f) => `<li>${esc(f.note)}</li>`).join("");
+  $("onchainContent").innerHTML = `
+    <div class="accum-top">
+      <div class="accum-dial ${oc.tone}">${oc.score}<span>/100</span></div>
+      <div class="accum-meta">
+        <div class="accum-verdict ${oc.tone}">${esc(oc.label)}</div>
+        <div class="accum-sub">Real Bitcoin network activity over the last 30 days — usage, value settled, and mining power.</div>
+      </div>
+    </div>
+    <div class="metrics">${chips}</div>
+    ${reasons ? `<ul class="fund-reasons">${reasons}</ul>` : ""}
+    <p class="val-source">Source: blockchain.info (public, keyless). On-chain activity is a fundamental backdrop — rising usage/security is constructive, but it is not a price signal. BTC only. Not financial advice.</p>`;
 }
 
 function renderAccum(accum, premium) {
@@ -4795,6 +4930,12 @@ function render(r, symbol, tier) {
   chips.push(chip("SMA200", fmt(s.sma200)));
   if (tier.tradePlan) chips.push(chip("ATR(14)", fmt(s.atr)));
   if (tier.voters === "all") chips.push(chip("ADX", r.adx.adx?.toFixed(0), r.adx.adx > 25 ? "buy" : ""));
+  // Volume confirmation: latest bar's volume vs its 20-bar average. >1.3× means
+  // the current move is backed by real participation; <0.7× means thin/suspect.
+  const relVol = relativeVolume(state.candles);
+  if (relVol != null) {
+    chips.push(chip("Rel. volume", relVol.toFixed(2) + "×", relVol >= 1.3 ? "buy" : relVol < 0.7 ? "sell" : ""));
+  }
   $("snapshot").innerHTML = chips.join("");
 
   // Breakdown — allowed voters + an upsell row for the locked ones
@@ -5226,6 +5367,14 @@ function upsell(msg) {
 
 function chip(label, value, tone = "") {
   return `<div class="metric ${tone}"><span class="ml">${label}</span><span class="mv">${value ?? "—"}</span></div>`;
+}
+// Latest bar volume vs its trailing 20-bar average (participation check).
+function relativeVolume(candles, period = 20) {
+  if (!Array.isArray(candles) || candles.length < period + 1) return null;
+  const vols = candles.slice(-period - 1, -1).map((c) => c.volume || 0);
+  const avg = vols.reduce((a, b) => a + b, 0) / vols.length;
+  const last = candles[candles.length - 1].volume || 0;
+  return avg > 0 ? last / avg : null;
 }
 function rsiTone(v) {
   if (v == null) return "";
