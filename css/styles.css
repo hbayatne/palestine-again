@@ -780,10 +780,11 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 #tab-analyze #edgeCard { order: 6; grid-column: 1 / -1; }  /* full width — no lone gap */
 #tab-analyze #fgCard { order: 7; }
 #tab-analyze #accumCard { order: 8; }
-#tab-analyze #snapshotCard { order: 9; }
-#tab-analyze #fundamentals { order: 10; }
-#tab-analyze #breakdownCard { order: 11; }
-#tab-analyze #valueCard { order: 12; }
+#tab-analyze #onchainCard { order: 9; }
+#tab-analyze #snapshotCard { order: 10; }
+#tab-analyze #fundamentals { order: 11; }
+#tab-analyze #breakdownCard { order: 12; }
+#tab-analyze #valueCard { order: 13; }
 
 /* ===== Market Regime engine ===== */
 .regime-card { margin-bottom: 4px; }

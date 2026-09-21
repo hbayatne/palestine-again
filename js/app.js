@@ -34,6 +34,7 @@ import {
 import { computeEdge, edgeAdjustedConfidence, computeRegime } from "./edge.js";
 import { detectDivergences, recentPivots, compressionState } from "./divergence.js";
 import { computeMarketRegime, REGIME_SYMBOLS } from "./regime.js";
+import { isBitcoin, fetchBtcOnChain, computeBtcOnChain } from "./onchain.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -225,6 +226,9 @@ async function run() {
   // Market sentiment & accumulation (crypto) — loads async, non-blocking.
   loadSentiment(symbol, tier, result);
 
+  // On-chain analytics (Bitcoin) — loads async, non-blocking.
+  loadOnChain(symbol, tier);
+
   // Edge analytics (historical backtest of this signal) — deferred so it never
   // blocks the first paint.
   loadEdge(symbol, tier, interval, result);
@@ -357,6 +361,53 @@ async function loadSentiment(symbol, tier, result) {
     if (myReq !== sentimentReqId) return;
     $("fgContent").innerHTML = `<p class="val-empty-note">Sentiment index unavailable right now (${esc(err.message)}).</p>`;
   }
+}
+
+// ---------------- On-chain analytics (Bitcoin) ----------------
+const ONCHAIN_CACHE = "signaldesk_onchain_v1";
+const ONCHAIN_TTL = 60 * 60 * 1000; // 1h — on-chain metrics are daily
+let onchainReqId = 0;
+async function loadOnChain(symbol, tier) {
+  const card = $("onchainCard");
+  if (!card) return;
+  if (!tier.sentiment || !isBitcoin(symbol)) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const myReq = ++onchainReqId;
+
+  // fresh cache?
+  try {
+    const cached = JSON.parse(localStorage.getItem(ONCHAIN_CACHE));
+    if (cached && cached.oc && Date.now() - cached.ts < ONCHAIN_TTL) { renderOnChain(cached.oc); return; }
+  } catch { /* ignore */ }
+
+  $("onchainContent").innerHTML = `<p class="status loading">Reading the Bitcoin network…</p>`;
+  const series = await fetchBtcOnChain();
+  if (myReq !== onchainReqId) return;
+  const oc = computeBtcOnChain(series);
+  if (!oc.available) {
+    $("onchainContent").innerHTML = `<p class="val-empty-note">${esc(oc.reason || "On-chain data unavailable.")}</p>`;
+    return;
+  }
+  try { localStorage.setItem(ONCHAIN_CACHE, JSON.stringify({ ts: Date.now(), oc })); } catch { /* ignore */ }
+  renderOnChain(oc);
+}
+
+function renderOnChain(oc) {
+  const chips = oc.factors
+    .map((f) => chip(f.label, (f.chg >= 0 ? "+" : "") + f.chg.toFixed(1) + "%", f.vote > 0.1 ? "buy" : f.vote < -0.1 ? "sell" : ""))
+    .join("");
+  const reasons = [...oc.supporting, ...oc.contradicting].map((f) => `<li>${esc(f.note)}</li>`).join("");
+  $("onchainContent").innerHTML = `
+    <div class="accum-top">
+      <div class="accum-dial ${oc.tone}">${oc.score}<span>/100</span></div>
+      <div class="accum-meta">
+        <div class="accum-verdict ${oc.tone}">${esc(oc.label)}</div>
+        <div class="accum-sub">Real Bitcoin network activity over the last 30 days — usage, value settled, and mining power.</div>
+      </div>
+    </div>
+    <div class="metrics">${chips}</div>
+    ${reasons ? `<ul class="fund-reasons">${reasons}</ul>` : ""}
+    <p class="val-source">Source: blockchain.info (public, keyless). On-chain activity is a fundamental backdrop — rising usage/security is constructive, but it is not a price signal. BTC only. Not financial advice.</p>`;
 }
 
 function renderAccum(accum, premium) {
@@ -622,6 +673,12 @@ function render(r, symbol, tier) {
   chips.push(chip("SMA200", fmt(s.sma200)));
   if (tier.tradePlan) chips.push(chip("ATR(14)", fmt(s.atr)));
   if (tier.voters === "all") chips.push(chip("ADX", r.adx.adx?.toFixed(0), r.adx.adx > 25 ? "buy" : ""));
+  // Volume confirmation: latest bar's volume vs its 20-bar average. >1.3× means
+  // the current move is backed by real participation; <0.7× means thin/suspect.
+  const relVol = relativeVolume(state.candles);
+  if (relVol != null) {
+    chips.push(chip("Rel. volume", relVol.toFixed(2) + "×", relVol >= 1.3 ? "buy" : relVol < 0.7 ? "sell" : ""));
+  }
   $("snapshot").innerHTML = chips.join("");
 
   // Breakdown — allowed voters + an upsell row for the locked ones
@@ -1053,6 +1110,14 @@ function upsell(msg) {
 
 function chip(label, value, tone = "") {
   return `<div class="metric ${tone}"><span class="ml">${label}</span><span class="mv">${value ?? "—"}</span></div>`;
+}
+// Latest bar volume vs its trailing 20-bar average (participation check).
+function relativeVolume(candles, period = 20) {
+  if (!Array.isArray(candles) || candles.length < period + 1) return null;
+  const vols = candles.slice(-period - 1, -1).map((c) => c.volume || 0);
+  const avg = vols.reduce((a, b) => a + b, 0) / vols.length;
+  const last = candles[candles.length - 1].volume || 0;
+  return avg > 0 ? last / avg : null;
 }
 function rsiTone(v) {
   if (v == null) return "";
