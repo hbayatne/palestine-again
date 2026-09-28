@@ -16,6 +16,9 @@ const {
   STRIPE_PRICE_PRO,
   APP_BASE_URL = "http://localhost:8080",
   FMP_API_KEY = "",
+  CONGRESS_HOUSE_URL = "https://house-stock-watcher-data.s3-us-west-2.amazonaws.com/data/all_transactions.json",
+  CONGRESS_SENATE_URL = "https://senate-stock-watcher-data.s3-us-west-2.amazonaws.com/aggregate/all_transactions.json",
+  CONGRESS_SYNC_TTL_HOURS = "12",
 } = process.env;
 
 export const config = {
@@ -27,6 +30,11 @@ export const config = {
   corsOrigin: CORS_ORIGIN,
   appBaseUrl: APP_BASE_URL,
   fmpApiKey: FMP_API_KEY,
+  congress: {
+    houseUrl: CONGRESS_HOUSE_URL,
+    senateUrl: CONGRESS_SENATE_URL,
+    ttlHours: Number(CONGRESS_SYNC_TTL_HOURS) || 12,
+  },
   stripe: {
     secretKey: STRIPE_SECRET_KEY,
     webhookSecret: STRIPE_WEBHOOK_SECRET,

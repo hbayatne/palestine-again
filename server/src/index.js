@@ -8,6 +8,7 @@ import { runMigrations } from "./migrate.js";
 import { authRouter } from "./auth.js";
 import { billingRouter, stripeWebhookHandler } from "./billing.js";
 import { dataRouter } from "./marketData.js";
+import { congressRouter } from "./congress.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -30,6 +31,7 @@ app.get("/health", (_req, res) => res.json({ ok: true, env: config.env, time: ne
 app.use("/auth", authRouter);
 app.use("/billing", billingRouter);
 app.use("/api", dataRouter);
+app.use("/api/congress", congressRouter);
 
 // Fallback error handler.
 app.use((err, _req, res, _next) => {

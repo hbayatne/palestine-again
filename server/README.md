@@ -40,6 +40,20 @@ npm start                 # http://localhost:8080/health
 | POST | `/billing/webhook` | Stripe sig | subscription lifecycle → tier (source of truth) |
 | GET  | `/api/candles?symbol=&interval=` | – | OHLCV proxy (no CORS hop) |
 | GET  | `/api/fundamentals?symbol=` | – | FMP proxy (key stays server-side) |
+| GET  | `/api/congress/recent?days=&type=&limit=` | Bearer | recent Congressional disclosures |
+| GET  | `/api/congress/ticker/:symbol?days=` | Bearer | Congressional trades in one ticker |
+| GET  | `/api/congress/spikes?days=&minMembers=` | Bearer | tickers several members are trading (investment "spikes") |
+| POST | `/api/congress/sync` | Bearer | force a refresh of the Congress cache |
+
+## Congressional trades
+`src/congress.js` fetches the public **House & Senate "Stock Watcher"** bulk
+datasets **server-side** (one fetch serves everyone — no browser CORS and no
+per-user free-API quota), normalizes them (amount ranges, dates, buy/sell/
+exchange), de-dupes, and caches them in `congress_trades`. Reads auto-refresh
+when the cache is older than `CONGRESS_SYNC_TTL_HOURS` (blocking only on the
+very first, empty load). Source URLs are env-configurable so a dataset move
+doesn't require a code change; if a source is unreachable, that source is
+skipped and cached data is served — never fabricated rows.
 
 ## Enforcement model
 `src/entitlements.js` is the **server-side source of truth** for tier limits.
