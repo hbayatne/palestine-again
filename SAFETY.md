@@ -26,6 +26,26 @@ Pre-existing guards kept: max-drawdown kill (15% from peak, now with intraday
 peak ratcheting via `markEquity`), min-equity floor, max concurrent positions,
 max trades/day, and no-pyramiding.
 
+### Live execution adapter (`robinhood-exec.mjs`)
+
+The only place an approved decision becomes a real order. The broker function is
+**injected** (`placeEquityOrder`) — this module imports no MCP tool — and it has
+three independent gates, any one of which stops the order:
+
+1. `live === false` (**the default**): the broker is never called; `execute()`
+   returns the order it *would* have sent, for inspection.
+2. A BUY must arrive `approved === true` (the loop stamps this only after a human
+   yes). An unapproved buy is refused here too, so an upstream wiring mistake
+   still cannot place it.
+3. Shorting is refused outright (cash-only account); it also refuses when `live`
+   but no `accountNumber` is set.
+
+So there are **two independent dry-run switches** — the loop's `dryRun` and the
+adapter's `live` — plus the approval gate. `test/robinhood-exec.test.mjs` proves,
+at both the adapter level and end-to-end through the loop, that the broker mock
+is never called in dry-run or without approval, and is called exactly once on the
+live + approved path.
+
 ### Hard vs soft halts
 `canTrade` now tags each block `hard` (account-wide: kill switch, drawdown,
 daily loss, equity floor, max concurrent / trades-per-day) or soft (this name

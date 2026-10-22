@@ -80,6 +80,7 @@ export async function runCycle(deps, watchlist, state, cfg, opts = {}) {
       record({ kind: "SCALE_OUT", symbol: pos.symbol, side: pos.side, shares: so.shares,
         price: so.price, reason: so.reason, approved: true, placed: canPlace });
       if (canPlace) {
+        act.approved = true; // risk-reducing sell — auto-approved
         await deps.execute(act);
         pos.shares -= so.shares; pos.scaledOut = true; pos.target = null;
       }
@@ -97,7 +98,7 @@ export async function runCycle(deps, watchlist, state, cfg, opts = {}) {
       actions.push(act);
       record({ kind: "EXIT", symbol: pos.symbol, side: pos.side, shares: pos.shares,
         price: exitPrice, reason: act.reason, pnl: act.pnl, approved: true, placed: canPlace });
-      if (canPlace) { await deps.execute(act); guard.recordExit(state, pos.symbol, pnl); }
+      if (canPlace) { act.approved = true; await deps.execute(act); guard.recordExit(state, pos.symbol, pnl); }
       log(`EXIT ${pos.symbol} @ ${exitPrice} (${act.reason}) pnl ${act.pnl}${canPlace ? "" : " [paper]"}`);
       continue;
     }
@@ -160,6 +161,7 @@ export async function runCycle(deps, watchlist, state, cfg, opts = {}) {
       setup: act.setup, reason: act.plan, approved, placed: approved });
 
     if (approved) {
+      act.approved = true; // human said yes — stamp it so the executor can verify
       await deps.execute(act);
       guard.recordEntry(state, { symbol, side: act.side, shares: act.shares,
         entry: act.entry, stop: act.stop, initialStop: act.stop,
