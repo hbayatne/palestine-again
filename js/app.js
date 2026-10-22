@@ -35,6 +35,7 @@ import { computeEdge, edgeAdjustedConfidence, computeRegime } from "./edge.js";
 import { detectDivergences, recentPivots, compressionState } from "./divergence.js";
 import { computeMarketRegime, REGIME_SYMBOLS } from "./regime.js";
 import { isBitcoin, fetchBtcOnChain, computeBtcOnChain } from "./onchain.js";
+import { getApiBase, setApiBase, pingBackend, fetchCongressTicker } from "./backend.js";
 
 // Presets across asset classes. `cg` (CoinGecko id) enables crypto fundamentals.
 const PRESET_GROUPS = [
@@ -229,6 +230,9 @@ async function run() {
   // On-chain analytics (Bitcoin) — loads async, non-blocking.
   loadOnChain(symbol, tier);
 
+  // Congressional trades (stocks/ETFs, via the backend if configured).
+  loadCongress(symbol, tier);
+
   // Edge analytics (historical backtest of this signal) — deferred so it never
   // blocks the first paint.
   loadEdge(symbol, tier, interval, result);
@@ -408,6 +412,59 @@ function renderOnChain(oc) {
     <div class="metrics">${chips}</div>
     ${reasons ? `<ul class="fund-reasons">${reasons}</ul>` : ""}
     <p class="val-source">Source: blockchain.info (public, keyless). On-chain activity is a fundamental backdrop — rising usage/security is constructive, but it is not a price signal. BTC only. Not financial advice.</p>`;
+}
+
+// ---------------- Congressional trades (backend) ----------------
+let congressReqId = 0;
+async function loadCongress(symbol, tier) {
+  const card = $("congressCard");
+  if (!card) return;
+  const type = assetType(symbol);
+  const eligible = type === "Stock" || type === "ETF/Fund";
+  if (!tier.fundamentals || !eligible || !getApiBase()) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const myReq = ++congressReqId;
+  $("congressContent").innerHTML = `<p class="status loading">Checking Congressional disclosures…</p>`;
+
+  const res = await fetchCongressTicker(symbol, 365);
+  if (myReq !== congressReqId) return;
+  if (!res.configured) { card.classList.add("hidden"); return; }
+  if (res.error) {
+    $("congressContent").innerHTML = `<p class="val-empty-note">Couldn't reach the backend (${esc(res.error)}). Check the API URL in ☰ Account.</p>`;
+    return;
+  }
+  renderCongress(symbol, res.trades);
+}
+
+function renderCongress(symbol, trades) {
+  if (!trades.length) {
+    $("congressContent").innerHTML = `<p class="val-empty-note">No Congressional disclosures for ${esc(symbol)} in the last 12 months.</p>
+      <p class="val-source">Source: House &amp; Senate STOCK Act filings (public). Disclosures lag the actual trade by up to ~45 days. Not financial advice.</p>`;
+    return;
+  }
+  const buys = trades.filter((t) => t.tx_type === "purchase").length;
+  const sells = trades.filter((t) => t.tx_type === "sale").length;
+  const members = new Set(trades.map((t) => t.member)).size;
+  const fmtAmt = (lo, hi) => (lo == null ? "—" : hi && hi !== lo ? `${fmt(lo, { compact: true })}–${fmt(hi, { compact: true })}` : `${fmt(lo, { compact: true })}`);
+  const rows = trades.slice(0, 12).map((t) => {
+    const tone = t.tx_type === "purchase" ? "buy" : t.tx_type === "sale" ? "sell" : "";
+    const label = t.tx_type === "purchase" ? "BUY" : t.tx_type === "sale" ? "SELL" : esc(t.tx_type || "—");
+    return `<tr>
+      <td>${esc(t.member || "—")}</td>
+      <td>${esc((t.chamber || "").slice(0, 1).toUpperCase() + (t.chamber || "").slice(1))}</td>
+      <td><span class="dv dv-${tone === "buy" ? "add" : tone === "sell" ? "sell" : "hold"}">${label}</span></td>
+      <td>${fmtAmt(t.amount_low, t.amount_high)}</td>
+      <td>${t.tx_date ? esc(String(t.tx_date).slice(0, 10)) : "—"}</td>
+    </tr>`;
+  }).join("");
+  const tally = `${trades.length} disclosure${trades.length === 1 ? "" : "s"} · <span class="buy">${buys} buys</span> / <span class="sell">${sells} sells</span> · ${members} member${members === 1 ? "" : "s"} (last 12mo)`;
+  $("congressContent").innerHTML = `
+    <p class="congress-tally">${tally}</p>
+    <div class="table-wrap"><table class="pf-table">
+      <thead><tr><th>Member</th><th>Chamber</th><th>Action</th><th>Amount</th><th>Trade date</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <p class="val-source">Source: House &amp; Senate STOCK Act filings via your backend. Disclosures lag the actual trade by up to ~45 days; amounts are disclosed as ranges. Not financial advice.</p>`;
 }
 
 function renderAccum(accum, premium) {
@@ -2946,6 +3003,8 @@ window.addEventListener("DOMContentLoaded", () => {
     renderUserBar();
     $("fmpKeyInput").value = getFmpKey();
     $("fmpKeyMsg").textContent = getFmpKey() ? "Key saved — fundamentals enabled." : "";
+    $("apiUrlInput").value = getApiBase();
+    $("apiUrlMsg").textContent = getApiBase() ? "Backend URL saved." : "";
     openMenu();
   });
   $("saveKeyBtn").addEventListener("click", () => {
@@ -2961,6 +3020,22 @@ window.addEventListener("DOMContentLoaded", () => {
     msg.className = "fund-key-msg";
     msg.textContent = "Testing…";
     const res = await testFmpKey();
+    msg.className = "fund-key-msg " + (res.ok ? "ok" : "err");
+    msg.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
+  });
+  $("saveApiBtn").addEventListener("click", () => {
+    setApiBase($("apiUrlInput").value);
+    const msg = $("apiUrlMsg");
+    msg.className = "fund-key-msg";
+    msg.textContent = getApiBase() ? "✓ Saved. Hit Test to verify." : "Backend URL cleared.";
+    if (state.result) run();
+  });
+  $("testApiBtn").addEventListener("click", async () => {
+    setApiBase($("apiUrlInput").value);
+    const msg = $("apiUrlMsg");
+    msg.className = "fund-key-msg";
+    msg.textContent = "Testing…";
+    const res = await pingBackend();
     msg.className = "fund-key-msg " + (res.ok ? "ok" : "err");
     msg.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
   });
