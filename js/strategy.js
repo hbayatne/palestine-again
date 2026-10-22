@@ -28,6 +28,7 @@ export const DEFAULTS = {
   requireRetest: false, // true = wait for breakout retest (fewer, cleaner trades)
   retestTol: 0.004,     // retest must come within 0.4% of the trigger
   maxRiskPerShareFrac: 0.15, // reject if stop is > 15% away (pattern too loose)
+  maxPositionPct: 0.15, // cap a single NAME at 15% of equity (house concentration rule)
   pivotLeft: 3,
   pivotRight: 3,
   tightenStop: false,   // true = place initial stop at nearest swing level (tighter)
@@ -140,11 +141,20 @@ export function evaluate(candles, equity, userOpts = {}) {
   // Position size: risk a fixed fraction of equity. This is the emotion-free core.
   const riskDollars = equity * o.riskPct;
   const rawShares = riskDollars / riskPerShare;
-  const shares = Math.floor(rawShares);
+  // Concentration cap: never let a single NAME exceed maxPositionPct of equity.
+  // The emitted size is the SMALLER of the risk-based size and the cap, so the
+  // proposal is already within the house rule before the portfolio guard sees it.
+  const capShares = Math.floor((o.maxPositionPct * equity) / price);
+  const shares = Math.min(Math.floor(rawShares), capShares);
   const notional = shares * price;
-  if (shares < 1)
+  const cappedByPct = Math.floor(rawShares) > capShares;
+  if (shares < 1) {
+    if (capShares < 1)
+      return no(`One share is $${price.toFixed(0)} = ${((price / equity) * 100).toFixed(0)}% of equity, over the ` +
+                `${Math.round(o.maxPositionPct * 100)}% per-name cap — name too expensive for this $${equity.toFixed(0)} book.`, { event });
     return no(`Risk budget $${riskDollars.toFixed(2)} too small for one share at ${fmt(price)} with this stop. ` +
               `Either the stop is too wide or the account too small for this name.`, { event });
+  }
   // Never let a single position exceed the whole account (no margin here).
   if (notional > equity)
     return no(`One share sizing wants $${notional.toFixed(0)} > equity $${equity.toFixed(0)} — name too expensive for this book.`, { event });
@@ -169,6 +179,7 @@ export function evaluate(candles, equity, userOpts = {}) {
     riskPerShare: round(riskPerShare),
     shares,
     notional: round(notional),
+    cappedByPct,  // true when the 15%-per-name cap, not risk, set the size
     riskDollars: round(riskDollars),
     riskPctOfEquity: o.riskPct * 100,
     confidence,

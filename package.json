@@ -1,0 +1,13 @@
+{
+  "name": "signaldesk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Breakout / change-of-structure trading engine with portfolio safety rails.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node build.mjs",
+    "loop:demo": "node js/run-loop-demo.mjs",
+    "safety:demo": "node js/run-safety-demo.mjs"
+  }
+}

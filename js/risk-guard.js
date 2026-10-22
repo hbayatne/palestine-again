@@ -15,7 +15,9 @@ export function defaultConfig(equity = 1000) {
     riskPerTradePct: 0.01,     // 1% risk/trade (passed to the strategy)
     maxConcurrent: 3,          // at most 3 open positions at once
     maxTradesPerDay: 5,        // cap churn / overtrading
-    maxNotionalPct: 0.34,      // no single position over ~1/3 of the book
+    maxPositionPct: 0.15,      // HOUSE RULE: no single NAME over 15% of the book
+    maxNotionalPct: 0.34,      // absolute ceiling (dominated by maxPositionPct)
+    minCashPct: 0.30,          // CASH FLOOR: always keep >= 30% of the book in cash
     minEquity: equity * 0.5,   // refuse to trade the account below half its start
   };
 }
@@ -50,36 +52,67 @@ export function rollDay(state, equity, day = today()) {
 }
 
 // The gate the loop checks before every candidate order.
-// Returns { ok, reason }. equity = current mark-to-market account value.
+// Returns { ok, reason, hard? }. equity = current mark-to-market account value.
+// `hard: true` means an account-wide halt — the loop should stop scanning this
+// cycle entirely, not just skip this one name.
+//
+// candidate may carry:
+//   symbol     — the name being considered
+//   notional   — $ value of the proposed position (shares * price)
+//   cash       — current spendable cash (enables the 30% cash-floor check)
+//   heldValue  — $ already held in this same name (for a top-up; usually 0)
 export function canTrade(state, cfg, equity, candidate = {}) {
+  // ---- Account-wide HARD halts (stop everything) -------------------------
   if (state.killSwitch)
-    return no(`KILL SWITCH engaged${state.haltedReason ? `: ${state.haltedReason}` : ""}. Clear it manually to resume.`);
+    return no(`KILL SWITCH engaged${state.haltedReason ? `: ${state.haltedReason}` : ""}. Clear it manually to resume.`, true);
 
   const peak = Math.max(state.peakEquity, equity);
-  const ddPct = (peak - equity) / peak;
+  const ddPct = peak > 0 ? (peak - equity) / peak : 0;
   if (ddPct >= cfg.maxDrawdownPct)
-    return no(`Max drawdown breached: down ${(ddPct * 100).toFixed(1)}% from peak (limit ${(cfg.maxDrawdownPct * 100)}%). Auto-halt.`);
+    return no(`Max drawdown breached: down ${(ddPct * 100).toFixed(1)}% from peak (limit ${(cfg.maxDrawdownPct * 100)}%). Auto-halt.`, true);
 
   if (equity < cfg.minEquity)
-    return no(`Equity $${equity.toFixed(0)} below floor $${cfg.minEquity.toFixed(0)}. Trading disabled to preserve capital.`);
+    return no(`Equity $${equity.toFixed(0)} below floor $${cfg.minEquity.toFixed(0)}. Trading disabled to preserve capital.`, true);
 
-  const dayLossPct = (state.startOfDayEquity - equity) / state.startOfDayEquity;
+  // Daily max-loss kill switch: down >= 3% on the day halts ALL new buys.
+  const dayLossPct = state.startOfDayEquity > 0
+    ? (state.startOfDayEquity - equity) / state.startOfDayEquity : 0;
   if (dayLossPct >= cfg.dailyLossCapPct)
-    return no(`Daily loss cap hit: down ${(dayLossPct * 100).toFixed(1)}% today (cap ${(cfg.dailyLossCapPct * 100)}%). Done for the day.`);
+    return no(`Daily loss cap hit: down ${(dayLossPct * 100).toFixed(1)}% today (cap ${(cfg.dailyLossCapPct * 100)}%). Done for the day.`, true);
 
   if (state.tradesToday >= cfg.maxTradesPerDay)
-    return no(`Max ${cfg.maxTradesPerDay} trades/day reached. Overtrading guard.`);
+    return no(`Max ${cfg.maxTradesPerDay} trades/day reached. Overtrading guard.`, true);
 
   if (state.openPositions.length >= cfg.maxConcurrent)
-    return no(`Max ${cfg.maxConcurrent} concurrent positions open.`);
+    return no(`Max ${cfg.maxConcurrent} concurrent positions open.`, true);
 
+  // ---- Per-candidate SOFT skips (this name only) -------------------------
   if (candidate.symbol && state.openPositions.some((p) => p.symbol === candidate.symbol))
-    return no(`Already hold ${candidate.symbol} — no pyramiding.`);
+    return no(`Already hold ${candidate.symbol} — no pyramiding.`, false);
 
-  if (candidate.notional != null && candidate.notional > cfg.maxNotionalPct * equity)
-    return no(`Position $${candidate.notional.toFixed(0)} exceeds ${Math.round(cfg.maxNotionalPct * 100)}% of the $${equity.toFixed(0)} book.`);
+  if (candidate.notional != null) {
+    const held = candidate.heldValue || 0;
+    const nameTotal = candidate.notional + held;
+    // 15%-per-name house rule (counts anything already held in the name).
+    if (nameTotal > cfg.maxPositionPct * equity)
+      return no(`${candidate.symbol || "Position"} would be $${nameTotal.toFixed(0)} = ` +
+        `${((nameTotal / equity) * 100).toFixed(1)}% of the $${equity.toFixed(0)} book, over the ` +
+        `${Math.round(cfg.maxPositionPct * 100)}% per-name cap.`, false);
+    // Absolute ceiling (legacy; normally dominated by the per-name cap).
+    if (nameTotal > cfg.maxNotionalPct * equity)
+      return no(`${candidate.symbol || "Position"} $${nameTotal.toFixed(0)} exceeds ${Math.round(cfg.maxNotionalPct * 100)}% of the $${equity.toFixed(0)} book.`, false);
 
-  return { ok: true, reason: "All risk gates clear." };
+    // 30% cash floor: a buy may not drag spendable cash below the floor.
+    if (candidate.cash != null) {
+      const cashAfter = candidate.cash - candidate.notional;
+      const floor = cfg.minCashPct * equity;
+      if (cashAfter < floor - 1e-6)
+        return no(`Buying $${candidate.notional.toFixed(0)} would leave $${cashAfter.toFixed(0)} cash, ` +
+          `under the ${Math.round(cfg.minCashPct * 100)}% floor ($${floor.toFixed(0)}). Trade blocked.`, false);
+    }
+  }
+
+  return { ok: true, reason: "All risk gates clear.", hard: false };
 }
 
 // Mutating helpers the loop calls when it actually fills / closes a trade.
@@ -108,5 +141,14 @@ export function clearKill(state) {
   return state;
 }
 
-function no(reason) { return { ok: false, reason }; }
+// Ratchet the high-water mark on every fresh equity read. Without this the peak
+// only updated on day rollover, so an intraday pump-then-dump understated the
+// drawdown the kill switch measures against. Call once per cycle with live equity.
+export function markEquity(state, equity) {
+  if (typeof equity === "number" && equity > (state.peakEquity ?? -Infinity))
+    state.peakEquity = equity;
+  return state;
+}
+
+function no(reason, hard = false) { return { ok: false, reason, hard }; }
 function today() { return new Date().toISOString().slice(0, 10); }
