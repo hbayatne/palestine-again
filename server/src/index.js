@@ -45,9 +45,13 @@ async function start() {
   app.listen(config.port, () => console.log(`[signaldesk-server] listening on :${config.port} (${config.env})`));
 }
 
-start().catch((e) => {
-  console.error("[fatal]", e.message);
-  process.exit(1);
-});
+// Only boot when run directly (`node src/index.js`). When imported by tests the
+// app is built but not started, so tests can run migrations and drive it themselves.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  start().catch((e) => {
+    console.error("[fatal]", e.message);
+    process.exit(1);
+  });
+}
 
-export { app };
+export { app, start };
