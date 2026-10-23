@@ -8,6 +8,7 @@
 import { runCycle } from "./live-loop.mjs";
 import * as guard from "./risk-guard.js";
 import { createDecisionLog } from "./decision-log.mjs";
+import { paperPnlReport, formatPaperPnlReport } from "./paper-report.mjs";
 import os from "node:os";
 import path from "node:path";
 
@@ -56,4 +57,9 @@ console.log("\n=== Append-only audit log ===");
 console.log("  " + logPath);
 for (const r of decisionLog.readAll())
   console.log(`  [${r.cycle}] ${r.kind} ${r.symbol || ""} approved=${r.approved} placed=${r.placed} :: ${r.reason || r.setup || ""}`);
+
+console.log("\n=== Paper P&L from the decision log ===");
+console.log("  (dry-run proposals only; live and withheld rows are excluded)");
+console.log(formatPaperPnlReport(paperPnlReport(decisionLog, { marks: { AAA: 100 } }))
+  .split("\n").map((l) => "  " + l).join("\n"));
 console.log();

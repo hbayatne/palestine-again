@@ -2,6 +2,17 @@
 
 How the breakout / structure strategy runs against a **real Robinhood account**.
 
+## Live orders are locked
+
+`js/robinhood-exec.mjs` throws on the live order path unless the process
+environment is exactly `ALLOW_LIVE_TRADING=I_UNDERSTAND`. The default executor
+fills an in-memory paper broker and does not call `placeEquityOrder`. The
+arming phrase does nothing while `live` is false, and the loop's dry-run and
+human-approval gates still apply after it is set. This repository does not
+ship credentials or a broker connection. Do not set the variable until a
+forward-tested paper track record exists. Paper P&L for that record is
+`paperPnlReport` in `js/paper-report.mjs`, computed from the decision log.
+
 ## Where it runs (important)
 
 The strategy code lives in this repo, but the loop must run in a session **where

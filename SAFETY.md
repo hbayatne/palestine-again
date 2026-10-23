@@ -6,7 +6,7 @@ change-of-structure engine, plus the findings from reviewing that engine.
 ## How to run
 
 ```bash
-npm test            # 41 unit tests (node --test)
+npm test            # 69 unit tests (node --test); no broker, no credentials
 npm run safety:demo # shows every rail firing, end-to-end, no broker
 npm run loop:demo   # the full strategy stack in SAFE propose mode
 ```
@@ -16,6 +16,9 @@ npm run loop:demo   # the full strategy stack in SAFE propose mode
 | Rail | Where | Behaviour |
 |------|-------|-----------|
 | **Paper / dry-run default-ON** | `live-loop.mjs` | `dryRun` is ON unless *explicitly* set `false`. While ON, `execute()` is never called — not even for exits. A new strategy is paper-only until a human turns it live. |
+| **Live-order latch** | `robinhood-exec.mjs` | The only call to the injected `placeEquityOrder` throws unless the process environment is exactly `ALLOW_LIVE_TRADING=I_UNDERSTAND`. Unset, `true`, `1`, or any other value refuses. `live: true` alone is not enough. |
+| **In-memory paper broker** | `paper-broker.mjs` | Default venue inside the executor. When `live` is not true, orders fill against a fake cash balance in this process. The injected broker function is not called, even if `ALLOW_LIVE_TRADING` is set. No socket, no credentials. |
+| **Paper P&L report** | `paper-report.mjs` | `paperPnlReport(decisionLog)` replays paper rows (dry-run `ENTER` / `EXIT` / `SCALE_OUT`, and executor `PAPER_FILL` rows) into realized and unrealized P&L. Live `SENT` rows and `dryRun: false` decisions are ignored. |
 | **Human approval before any buy** | `live-loop.mjs` | Every `ENTER` (buy) requires `deps.approve(action)` to return truthy. No approver, a falsy answer, or an approver that throws ⇒ the buy stays a proposal (`AWAITING_APPROVAL`). Fails **closed**. Exits/scale-outs reduce risk and do not need approval. |
 | **Daily max-loss kill switch (3%)** | `risk-guard.js` | `canTrade` returns a **hard** halt when the account is down ≥ 3% on the day (`startOfDayEquity → equity`, marked-to-market). The loop stops scanning for the rest of the day; it re-arms on the next day rollover. |
 | **15% per-name cap** | `strategy.js` + `risk-guard.js` | Sizing is the *smaller* of the risk-based size and 15% of equity (`cappedByPct` flags when the cap bound). The guard re-checks `notional + value-already-held ≤ 15%` as a backstop. |
@@ -29,22 +32,35 @@ max trades/day, and no-pyramiding.
 ### Live execution adapter (`robinhood-exec.mjs`)
 
 The only place an approved decision becomes a real order. The broker function is
-**injected** (`placeEquityOrder`) — this module imports no MCP tool — and it has
-three independent gates, any one of which stops the order:
+**injected** (`placeEquityOrder`) — this module imports no MCP tool and reads no
+credentials — and the live call is unreachable unless every gate below passes:
 
-1. `live === false` (**the default**): the broker is never called; `execute()`
-   returns the order it *would* have sent, for inspection.
-2. A BUY must arrive `approved === true` (the loop stamps this only after a human
+1. `live === false` (**the default**): the order fills on the in-memory paper
+   broker. `execute()` still returns `dryRun: true` and the order it would have
+   sent. The injected `placeEquityOrder` is not called.
+2. **Environment latch.** On the live path (`live === true`), `execute()` throws
+   `LIVE_TRADING_LOCKED` unless `ALLOW_LIVE_TRADING` is exactly `I_UNDERSTAND`.
+   The throw happens before the injected function runs, and the attempt is not
+   paper-filled either. Setting the variable does nothing while `live` is false.
+3. A BUY must arrive `approved === true` (the loop stamps this only after a human
    yes). An unapproved buy is refused here too, so an upstream wiring mistake
    still cannot place it.
-3. Shorting is refused outright (cash-only account); it also refuses when `live`
+4. Shorting is refused outright (cash-only account); it also refuses when `live`
    but no `accountNumber` is set.
 
 So there are **two independent dry-run switches** — the loop's `dryRun` and the
-adapter's `live` — plus the approval gate. `test/robinhood-exec.test.mjs` proves,
-at both the adapter level and end-to-end through the loop, that the broker mock
-is never called in dry-run or without approval, and is called exactly once on the
-live + approved path.
+adapter's `live` — plus the environment latch and the approval gate.
+`test/robinhood-exec.test.mjs` proves the injected `placeEquityOrder` is never
+called in default mode, that the live path throws for every value other than
+`I_UNDERSTAND`, and that the mock is called exactly once only when live, armed,
+and approved.
+
+### Paper P&L
+
+`paperPnlReport` (and `formatPaperPnlReport`) in `js/paper-report.mjs` read a
+decision log — a `{ readAll() }` logger or an array of its records — and replay
+paper trades with average-cost accounting. Pass `{ marks: { AAA: 123.45 } }` to
+mark open positions. It does not place orders.
 
 ### Hard vs soft halts
 `canTrade` now tags each block `hard` (account-wide: kill switch, drawdown,
