@@ -24,6 +24,7 @@ const MODULE_ORDER = [
   "js/divergence.js",
   "js/regime.js",
   "js/onchain.js",
+  "js/backend.js",
   "js/news.js",
   "js/signals.js",
   "js/app.js",

@@ -24,9 +24,15 @@ npm start                 # http://localhost:8080/health
 
 ## Deploy (Railway)
 1. Create a Railway project; add a **PostgreSQL** plugin (gives `DATABASE_URL`).
-2. New service → deploy this repo, **root directory = `server/`** (`railway.json` sets build/start/health).
-3. Add the env vars from `.env.example` in the Railway dashboard (never commit them).
-4. First boot runs migrations automatically.
+2. New service → deploy this repo, **root directory = `server/`** (`railway.json` sets build/start/health; a `Procfile` is included too).
+3. Add the env vars from `.env.example` in the Railway dashboard (never commit them). Generate a strong secret with:
+   ```bash
+   cd server && npm run gen:secret   # prints a random JWT_SECRET
+   ```
+4. First boot runs migrations automatically (`start()` → `runMigrations()`).
+
+## Tests & CI
+`npm test` runs the suite (`node --test`): unit tests (parsers, entitlements) always run; integration tests (health, signup→login→me, congress query) run only when `DATABASE_URL` is set. GitHub Actions (`.github/workflows/backend-ci.yml`) runs both on changes under `server/**` — the integration job spins up a Postgres service, runs migrations, and drives the real app.
 
 ## Endpoints
 | Method | Path | Auth | Purpose |
@@ -40,9 +46,9 @@ npm start                 # http://localhost:8080/health
 | POST | `/billing/webhook` | Stripe sig | subscription lifecycle → tier (source of truth) |
 | GET  | `/api/candles?symbol=&interval=` | – | OHLCV proxy (no CORS hop) |
 | GET  | `/api/fundamentals?symbol=` | – | FMP proxy (key stays server-side) |
-| GET  | `/api/congress/recent?days=&type=&limit=` | Bearer | recent Congressional disclosures |
-| GET  | `/api/congress/ticker/:symbol?days=` | Bearer | Congressional trades in one ticker |
-| GET  | `/api/congress/spikes?days=&minMembers=` | Bearer | tickers several members are trading (investment "spikes") |
+| GET  | `/api/congress/recent?days=&type=&limit=` | – | recent Congressional disclosures (public data) |
+| GET  | `/api/congress/ticker/:symbol?days=` | – | Congressional trades in one ticker (public data) |
+| GET  | `/api/congress/spikes?days=&minMembers=` | – | tickers several members are trading (investment "spikes") |
 | POST | `/api/congress/sync` | Bearer | force a refresh of the Congress cache |
 
 ## Congressional trades

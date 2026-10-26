@@ -57,7 +57,7 @@ function externalId(rec) {
   return crypto.createHash("sha1").update(key).digest("hex").slice(0, 32);
 }
 
-function normalizeHouse(raw) {
+export function normalizeHouse(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map((r) => {
     const [lo, hi] = parseAmount(r.amount);
@@ -78,7 +78,7 @@ function normalizeHouse(raw) {
   });
 }
 
-function normalizeSenate(raw) {
+export function normalizeSenate(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.map((r) => {
     const [lo, hi] = parseAmount(r.amount);
@@ -170,7 +170,7 @@ async function ensureFresh() {
 export const congressRouter = express.Router();
 
 // Recent disclosures, optionally filtered by type.
-congressRouter.get("/recent", authRequired, async (req, res) => {
+congressRouter.get("/recent", async (req, res) => {
   await ensureFresh();
   const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
   const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
@@ -188,7 +188,7 @@ congressRouter.get("/recent", authRequired, async (req, res) => {
 });
 
 // All disclosures for one ticker.
-congressRouter.get("/ticker/:symbol", authRequired, async (req, res) => {
+congressRouter.get("/ticker/:symbol", async (req, res) => {
   await ensureFresh();
   const sym = cleanTicker(req.params.symbol);
   if (!sym) return res.status(400).json({ error: "bad_ticker" });
@@ -203,7 +203,7 @@ congressRouter.get("/ticker/:symbol", authRequired, async (req, res) => {
 });
 
 // "Investment spikes": tickers several members are trading recently.
-congressRouter.get("/spikes", authRequired, async (req, res) => {
+congressRouter.get("/spikes", async (req, res) => {
   await ensureFresh();
   const days = Math.min(120, Math.max(1, Number(req.query.days) || 30));
   const minMembers = Math.max(2, Number(req.query.minMembers) || 2);

@@ -783,8 +783,9 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 #tab-analyze #onchainCard { order: 9; }
 #tab-analyze #snapshotCard { order: 10; }
 #tab-analyze #fundamentals { order: 11; }
-#tab-analyze #breakdownCard { order: 12; }
-#tab-analyze #valueCard { order: 13; }
+#tab-analyze #congressCard { order: 12; }
+#tab-analyze #breakdownCard { order: 13; }
+#tab-analyze #valueCard { order: 14; }
 
 /* ===== Market Regime engine ===== */
 .regime-card { margin-bottom: 4px; }
@@ -810,3 +811,9 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .rg-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
 .rg-list.buy li::marker { color: var(--buy); } .rg-list.sell li::marker { color: var(--sell); }
 .rg-none { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ===== Congressional trades card ===== */
+.congress-tally { font-size: 13px; color: var(--muted); margin: 2px 0 12px; }
+.congress-tally .buy { color: var(--buy); font-weight: 600; }
+.congress-tally .sell { color: var(--sell); font-weight: 600; }
+#congressContent .pf-table td { vertical-align: middle; }

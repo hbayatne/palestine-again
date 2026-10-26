@@ -790,8 +790,9 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 #tab-analyze #onchainCard { order: 9; }
 #tab-analyze #snapshotCard { order: 10; }
 #tab-analyze #fundamentals { order: 11; }
-#tab-analyze #breakdownCard { order: 12; }
-#tab-analyze #valueCard { order: 13; }
+#tab-analyze #congressCard { order: 12; }
+#tab-analyze #breakdownCard { order: 13; }
+#tab-analyze #valueCard { order: 14; }
 
 /* ===== Market Regime engine ===== */
 .regime-card { margin-bottom: 4px; }
@@ -817,6 +818,12 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
 .rg-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
 .rg-list.buy li::marker { color: var(--buy); } .rg-list.sell li::marker { color: var(--sell); }
 .rg-none { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ===== Congressional trades card ===== */
+.congress-tally { font-size: 13px; color: var(--muted); margin: 2px 0 12px; }
+.congress-tally .buy { color: var(--buy); font-weight: 600; }
+.congress-tally .sell { color: var(--sell); font-weight: 600; }
+#congressContent .pf-table td { vertical-align: middle; }
 
 </style>
 </head>
@@ -882,6 +889,19 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
             <button id="testKeyBtn" class="btn-ghost">Test</button>
           </div>
           <div id="fmpKeyMsg" class="fund-key-msg"></div>
+        </div>
+
+        <div class="menu-fund">
+          <label for="apiUrlInput">Backend API URL (for Congressional trades &amp; more)</label>
+          <p class="menu-fund-note">Optional. Paste your deployed SignalDesk backend URL (e.g.
+            <code>https://your-app.up.railway.app</code>) to enable server-powered features like
+            Congressional-trade tracking. Leave blank to keep the app fully client-side.</p>
+          <div class="fund-key-row">
+            <input id="apiUrlInput" type="url" placeholder="https://your-backend.up.railway.app" autocomplete="off" spellcheck="false" />
+            <button id="saveApiBtn" class="btn-ghost">Save</button>
+            <button id="testApiBtn" class="btn-ghost">Test</button>
+          </div>
+          <div id="apiUrlMsg" class="fund-key-msg"></div>
         </div>
       </div>
     </div>
@@ -1041,6 +1061,11 @@ button#analyzeBtn, .btn-upgrade, .tier-btn:not(.current), .btn-buy {
               <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
               <div id="fundMetrics" class="metrics"></div>
               <ul id="fundReasons" class="fund-reasons"></ul>
+            </div>
+
+            <div class="card chart-card hidden" id="congressCard">
+              <h2>🏛️ Congressional trades</h2>
+              <div id="congressContent"></div>
             </div>
 
             <div class="card chart-card" id="breakdownCard">
@@ -3799,6 +3824,65 @@ function computeBtcOnChain(series) {
 }
 
 
+// backend.js — thin client for the SignalDesk backend (server/).
+//
+// The app is static and the backend is deployed separately, so its URL isn't
+// known at build time. The user pastes it once (☰ Account → Backend API URL);
+// it's stored in localStorage. With no URL set, backend-powered features simply
+// stay hidden — the rest of the app is unaffected.
+const API_URL_STORE = "signaldesk_api_url";
+
+function getApiBase() {
+  try {
+    return (localStorage.getItem(API_URL_STORE) || "").trim().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function setApiBase(url) {
+  try {
+    const v = (url || "").trim().replace(/\/+$/, "");
+    if (v) localStorage.setItem(API_URL_STORE, v);
+    else localStorage.removeItem(API_URL_STORE);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function apiGet(path, ms = 7000) {
+  const base = getApiBase();
+  if (!base) return { configured: false };
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(`${base}${path}`, { signal: ctrl.signal, headers: { accept: "application/json" } });
+    if (!res.ok) return { configured: true, error: `HTTP ${res.status}` };
+    return { configured: true, data: await res.json() };
+  } catch (e) {
+    return { configured: true, error: e.message || "network error" };
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// Quick liveness check for the "Test" button in the menu.
+async function pingBackend() {
+  const r = await apiGet("/health", 6000);
+  if (!r.configured) return { ok: false, msg: "No URL set." };
+  if (r.error) return { ok: false, msg: r.error };
+  return { ok: !!(r.data && r.data.ok), msg: r.data && r.data.ok ? `Reachable (${r.data.env || "ok"})` : "Unexpected response" };
+}
+
+// Congressional (STOCK Act) disclosures for one ticker.
+async function fetchCongressTicker(symbol, days = 365) {
+  const r = await apiGet(`/api/congress/ticker/${encodeURIComponent(symbol)}?days=${days}`);
+  if (!r.configured) return { configured: false };
+  if (r.error) return { configured: true, error: r.error };
+  return { configured: true, ticker: r.data.ticker, trades: r.data.trades || [] };
+}
+
+
 // news.js — fetches recent market headlines for the scrolling ticker.
 // Crypto: CryptoCompare public news API (CORS-enabled, no key).
 // Stocks: Yahoo Finance RSS headline feed via CORS proxies.
@@ -4486,6 +4570,9 @@ async function run() {
   // On-chain analytics (Bitcoin) — loads async, non-blocking.
   loadOnChain(symbol, tier);
 
+  // Congressional trades (stocks/ETFs, via the backend if configured).
+  loadCongress(symbol, tier);
+
   // Edge analytics (historical backtest of this signal) — deferred so it never
   // blocks the first paint.
   loadEdge(symbol, tier, interval, result);
@@ -4665,6 +4752,59 @@ function renderOnChain(oc) {
     <div class="metrics">${chips}</div>
     ${reasons ? `<ul class="fund-reasons">${reasons}</ul>` : ""}
     <p class="val-source">Source: blockchain.info (public, keyless). On-chain activity is a fundamental backdrop — rising usage/security is constructive, but it is not a price signal. BTC only. Not financial advice.</p>`;
+}
+
+// ---------------- Congressional trades (backend) ----------------
+let congressReqId = 0;
+async function loadCongress(symbol, tier) {
+  const card = $("congressCard");
+  if (!card) return;
+  const type = assetType(symbol);
+  const eligible = type === "Stock" || type === "ETF/Fund";
+  if (!tier.fundamentals || !eligible || !getApiBase()) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const myReq = ++congressReqId;
+  $("congressContent").innerHTML = `<p class="status loading">Checking Congressional disclosures…</p>`;
+
+  const res = await fetchCongressTicker(symbol, 365);
+  if (myReq !== congressReqId) return;
+  if (!res.configured) { card.classList.add("hidden"); return; }
+  if (res.error) {
+    $("congressContent").innerHTML = `<p class="val-empty-note">Couldn't reach the backend (${esc(res.error)}). Check the API URL in ☰ Account.</p>`;
+    return;
+  }
+  renderCongress(symbol, res.trades);
+}
+
+function renderCongress(symbol, trades) {
+  if (!trades.length) {
+    $("congressContent").innerHTML = `<p class="val-empty-note">No Congressional disclosures for ${esc(symbol)} in the last 12 months.</p>
+      <p class="val-source">Source: House &amp; Senate STOCK Act filings (public). Disclosures lag the actual trade by up to ~45 days. Not financial advice.</p>`;
+    return;
+  }
+  const buys = trades.filter((t) => t.tx_type === "purchase").length;
+  const sells = trades.filter((t) => t.tx_type === "sale").length;
+  const members = new Set(trades.map((t) => t.member)).size;
+  const fmtAmt = (lo, hi) => (lo == null ? "—" : hi && hi !== lo ? `${fmt(lo, { compact: true })}–${fmt(hi, { compact: true })}` : `${fmt(lo, { compact: true })}`);
+  const rows = trades.slice(0, 12).map((t) => {
+    const tone = t.tx_type === "purchase" ? "buy" : t.tx_type === "sale" ? "sell" : "";
+    const label = t.tx_type === "purchase" ? "BUY" : t.tx_type === "sale" ? "SELL" : esc(t.tx_type || "—");
+    return `<tr>
+      <td>${esc(t.member || "—")}</td>
+      <td>${esc((t.chamber || "").slice(0, 1).toUpperCase() + (t.chamber || "").slice(1))}</td>
+      <td><span class="dv dv-${tone === "buy" ? "add" : tone === "sell" ? "sell" : "hold"}">${label}</span></td>
+      <td>${fmtAmt(t.amount_low, t.amount_high)}</td>
+      <td>${t.tx_date ? esc(String(t.tx_date).slice(0, 10)) : "—"}</td>
+    </tr>`;
+  }).join("");
+  const tally = `${trades.length} disclosure${trades.length === 1 ? "" : "s"} · <span class="buy">${buys} buys</span> / <span class="sell">${sells} sells</span> · ${members} member${members === 1 ? "" : "s"} (last 12mo)`;
+  $("congressContent").innerHTML = `
+    <p class="congress-tally">${tally}</p>
+    <div class="table-wrap"><table class="pf-table">
+      <thead><tr><th>Member</th><th>Chamber</th><th>Action</th><th>Amount</th><th>Trade date</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <p class="val-source">Source: House &amp; Senate STOCK Act filings via your backend. Disclosures lag the actual trade by up to ~45 days; amounts are disclosed as ranges. Not financial advice.</p>`;
 }
 
 function renderAccum(accum, premium) {
@@ -7203,6 +7343,8 @@ window.addEventListener("DOMContentLoaded", () => {
     renderUserBar();
     $("fmpKeyInput").value = getFmpKey();
     $("fmpKeyMsg").textContent = getFmpKey() ? "Key saved — fundamentals enabled." : "";
+    $("apiUrlInput").value = getApiBase();
+    $("apiUrlMsg").textContent = getApiBase() ? "Backend URL saved." : "";
     openMenu();
   });
   $("saveKeyBtn").addEventListener("click", () => {
@@ -7218,6 +7360,22 @@ window.addEventListener("DOMContentLoaded", () => {
     msg.className = "fund-key-msg";
     msg.textContent = "Testing…";
     const res = await testFmpKey();
+    msg.className = "fund-key-msg " + (res.ok ? "ok" : "err");
+    msg.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
+  });
+  $("saveApiBtn").addEventListener("click", () => {
+    setApiBase($("apiUrlInput").value);
+    const msg = $("apiUrlMsg");
+    msg.className = "fund-key-msg";
+    msg.textContent = getApiBase() ? "✓ Saved. Hit Test to verify." : "Backend URL cleared.";
+    if (state.result) run();
+  });
+  $("testApiBtn").addEventListener("click", async () => {
+    setApiBase($("apiUrlInput").value);
+    const msg = $("apiUrlMsg");
+    msg.className = "fund-key-msg";
+    msg.textContent = "Testing…";
+    const res = await pingBackend();
     msg.className = "fund-key-msg " + (res.ok ? "ok" : "err");
     msg.textContent = (res.ok ? "✓ " : "✗ ") + res.msg;
   });

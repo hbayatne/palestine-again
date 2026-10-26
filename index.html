@@ -69,6 +69,19 @@
           </div>
           <div id="fmpKeyMsg" class="fund-key-msg"></div>
         </div>
+
+        <div class="menu-fund">
+          <label for="apiUrlInput">Backend API URL (for Congressional trades &amp; more)</label>
+          <p class="menu-fund-note">Optional. Paste your deployed SignalDesk backend URL (e.g.
+            <code>https://your-app.up.railway.app</code>) to enable server-powered features like
+            Congressional-trade tracking. Leave blank to keep the app fully client-side.</p>
+          <div class="fund-key-row">
+            <input id="apiUrlInput" type="url" placeholder="https://your-backend.up.railway.app" autocomplete="off" spellcheck="false" />
+            <button id="saveApiBtn" class="btn-ghost">Save</button>
+            <button id="testApiBtn" class="btn-ghost">Test</button>
+          </div>
+          <div id="apiUrlMsg" class="fund-key-msg"></div>
+        </div>
       </div>
     </div>
 
@@ -227,6 +240,11 @@
               <h2>Fundamentals <span id="fundScore" class="mini-score"></span></h2>
               <div id="fundMetrics" class="metrics"></div>
               <ul id="fundReasons" class="fund-reasons"></ul>
+            </div>
+
+            <div class="card chart-card hidden" id="congressCard">
+              <h2>🏛️ Congressional trades</h2>
+              <div id="congressContent"></div>
             </div>
 
             <div class="card chart-card" id="breakdownCard">
