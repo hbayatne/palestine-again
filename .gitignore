@@ -1,0 +1,5 @@
+
+# runtime trade/decision audit logs
+trade-decisions.*
+*.log.jsonl
+node_modules/
